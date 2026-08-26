@@ -423,6 +423,7 @@ export interface OnChainPayment {
   txHash: string;
   timestamp?: number;
   metadata?: string;
+  assetCode?: string;
 }
 
 /**
@@ -484,6 +485,7 @@ export async function fetchOnChainPayments(
         txHash: String(raw.tx_hash ?? ""),
         timestamp: raw.timestamp ? Number(raw.timestamp) : undefined,
         metadata: raw.metadata ? String(raw.metadata) : undefined,
+        assetCode: raw.asset_code ? String(raw.asset_code) : "XLM",
       };
     }
     return null;
