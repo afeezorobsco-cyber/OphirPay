@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 
 import { logger } from "@/lib/logger";
-import { incMetric } from "@/lib/metrics-counters";
+import {
+  incDeliveryAttempt,
+  incDeliveryFinalOutcome,
+  incMetric,
+} from "@/lib/metrics-counters";
 import { isSafeWebhookUrlAtDelivery } from "@/lib/webhook-url-guard";
 import crypto from "crypto";
 
@@ -53,19 +57,24 @@ export async function deliverWebhook(
   maxRetries = 3
 ): Promise<boolean> {
   const { body, signature } = buildSignedPayload(payload, secret);
+  const totalAttempts = Number.isFinite(maxRetries)
+    ? Math.max(1, Math.floor(maxRetries))
+    : 1;
 
   // Re-validate the destination at delivery time to mitigate DNS rebinding.
   if (!(await isSafeWebhookUrlAtDelivery(url))) {
     logger.error("Webhook delivery blocked — URL resolved to a private/internal address", { url });
     incMetric("webhooks_failed_total");
+    incDeliveryFinalOutcome("webhook", 1, "failure");
     return false;
   }
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+  for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+    incDeliveryAttempt("webhook", attempt);
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
       // `redirect: "manual"` closes the SSRF redirect bypass: without it the
       // default fetch behavior follows 3xx hops to internal addresses (e.g.
       // http://169.254.169.254) even after the initial URL passed the guard.
@@ -81,28 +90,30 @@ export async function deliverWebhook(
         redirect: "manual",
       });
 
-      clearTimeout(timeout);
-
       // Treat any redirect (3xx) as a failure — we never follow it, so the
       // destination cannot be swapped for an internal address mid-delivery.
       if (response.ok) {
         logger.info("Webhook delivered", { url, event: payload.event, attempt });
         incMetric("webhooks_delivered_total");
+        incDeliveryFinalOutcome("webhook", attempt, "success");
         return true;
       }
 
       logger.warn("Webhook delivery failed", { url, status: response.status, attempt });
     } catch (err) {
       logger.warn("Webhook delivery error", { url, error: String(err), attempt });
+    } finally {
+      clearTimeout(timeout);
     }
 
     // Exponential backoff: 1s, 2s, 4s
-    if (attempt < maxRetries) {
+    if (attempt < totalAttempts) {
       await new Promise((r) => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
     }
   }
 
   logger.error("Webhook delivery exhausted retries", { url, event: payload.event });
   incMetric("webhooks_failed_total");
+  incDeliveryFinalOutcome("webhook", totalAttempts, "failure");
   return false;
 }
