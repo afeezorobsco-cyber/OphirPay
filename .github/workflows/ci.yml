@@ -1,4 +1,4 @@
-name: OphirPay CI/CD — 20 Jobs
+name: OphirPay CI/CD — 22 Jobs
 
 on:
   push:
@@ -727,3 +727,39 @@ jobs:
             contracts/ophirpay/target/wasm32v1-none/release/*.wasm
             contracts/emitter/target/wasm32v1-none/release/*.wasm
           retention-days: 7
+
+  # ══════════════════════════════════════════════════════════════
+  # 22. TESTNET INTEGRATION — Live RPC testnet contract verification
+  # ══════════════════════════════════════════════════════════════
+  testnet-integration:
+    name: "2️⃣2️⃣ Backend — Testnet Integration (RPC)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: contract-wasm
+    continue-on-error: true # Non-blocking on testnet RPC rate-limits / outages
+    env:
+      SOROBAN_RPC_URL: https://soroban-testnet.stellar.org
+      STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      SKIP_ON_NETWORK_ERROR: "true"
+      NEXT_PUBLIC_CONTRACT_ID: CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET
+      NEXT_PUBLIC_EMITTER_CONTRACT_ID: CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.91.0
+        with:
+          targets: wasm32v1-none
+      - name: Install build deps
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq build-essential
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc', cache: "npm" }
+      - run: npm ci
+      - name: Download contract WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: contract-wasm
+          path: contracts/
+      - name: Run Cargo integration test suite
+        run: cd contracts/ophirpay && cargo test --test integration_tests
+      - name: Run Live RPC Testnet Integration Tests
+        run: node scripts/testnet-integration.mjs
+
