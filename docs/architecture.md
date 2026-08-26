@@ -145,6 +145,7 @@ ophirpay/
 ├── helm/                   # Helm chart
 ├── scripts/                # Deployment, demo, relayer, seeding
 ├── e2e/                    # Playwright E2E tests
+├── tests/visual/           # Playwright visual regression tests + baselines
 ├── monitoring/             # Grafana dashboard JSON
 └── docs/                   # Documentation
 ```

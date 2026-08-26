@@ -53,7 +53,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:testnet": "node scripts/testnet-integration.mjs",
-    "test:contract:integration": "node scripts/testnet-integration.mjs"
+    "test:contract:integration": "node scripts/testnet-integration.mjs",
+    "test:visual": "playwright test --config playwright.visual.config.ts",
+    "test:visual:update": "playwright test --config playwright.visual.config.ts --update-snapshots"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",

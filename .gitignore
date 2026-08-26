@@ -69,4 +69,5 @@ contracts/**/spec/target/
 
 # Playwright
 playwright-report/
+playwright-visual-report/
 test-results/

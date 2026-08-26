@@ -568,6 +568,29 @@ All app tests live in `src/__tests__/` (33 files, 806 cases): auth & sessions, C
 | `multisig.spec.ts` | Multisig propose/approve flows |
 | `governance.spec.ts` | Proposal lifecycle |
 
+### Visual Regression Tests (Playwright) — critical pages
+
+Screenshot-based visual coverage for the core pages (Dashboard, Send, Batches,
+Contracts) at desktop width, in both light and dark themes. Baselines live in
+`tests/visual/__screenshots__/` and are compared on every run.
+
+```bash
+# Compare the live render against committed baselines
+npm run test:visual
+
+# Intentionally update baselines (commit the regenerated PNGs)
+npm run test:visual:update
+```
+
+A committed change that alters a baseline beyond the configured pixel
+threshold (`maxDiffPixelRatio: 0.001` in `tests/visual/visual-regression.spec.ts`)
+fails the run and emits a diff artifact under `playwright-visual-report/`.
+
+**Updating baselines intentionally:** after a deliberate UI change, run
+`npm run test:visual:update`, review the regenerated screenshots in
+`tests/visual/__screenshots__/`, and commit them alongside the change. Never
+update baselines to mask an unintended regression.
+
 ### Error Classification System
 
 All contract failures route through a 3-tier classifier:
