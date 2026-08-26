@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import prisma from "@/lib/prisma";
 import { createRecurrenceSchema, paginationSchema } from "@/lib/validation-schemas";
@@ -12,7 +13,7 @@ import { logger } from "@/lib/logger";
 import { getAuthContext } from "@/lib/auth-session";
 import { withRequestLogging } from "@/lib/request-logging";
 
-export const GET = withRequestLogging(async function GET(request: Request) {
+export const GET = withMetrics("GET /api/recurring", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -45,9 +46,9 @@ export const GET = withRequestLogging(async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/recurring");
   }
-});
+}));
 
-export const POST = withRequestLogging(async function POST(request: Request) {
+export const POST = withMetrics("POST /api/recurring", withRequestLogging(async function POST(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -88,4 +89,4 @@ export const POST = withRequestLogging(async function POST(request: Request) {
   } catch (err) {
     return handleApiError(err, "POST /api/recurring");
   }
-});
+}));

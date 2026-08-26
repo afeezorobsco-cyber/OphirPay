@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 /**
  * SSE (Server-Sent Events) endpoint for real-time payment event streaming.
@@ -18,7 +19,7 @@ import { createLiveEventSource } from "@/lib/events/event-source";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export const GET = withMetrics("GET /api/events", async function GET() {
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -69,4 +70,4 @@ export async function GET() {
       "X-Accel-Buffering": "no",
     },
   });
-}
+});

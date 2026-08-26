@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import prisma from "@/lib/prisma";
 import { STELLAR_NETWORK, SOROBAN_RPC_URL, HORIZON_URL } from "@/lib/stellar";
@@ -6,7 +7,7 @@ import { OPHIRPAY_CONTRACT_ID } from "@/lib/contracts";
 import { successResponse, serverError } from "@/lib/api-response";
 import { withRequestLogging } from "@/lib/request-logging";
 
-export const GET = withRequestLogging(async function GET() {
+export const GET = withMetrics("GET /api/health", withRequestLogging(async function GET() {
   try {
     // Check database connectivity
     let dbStatus: "ok" | "error" = "ok";
@@ -115,4 +116,4 @@ export const GET = withRequestLogging(async function GET() {
   } catch {
     return serverError("Health check failed");
   }
-});
+}));

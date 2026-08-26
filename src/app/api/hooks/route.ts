@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import prisma from "@/lib/prisma";
 import {
@@ -13,7 +14,7 @@ import { validateBody, createHookSchema } from "@/lib/validation-schemas";
 import { isSafeWebhookUrl } from "@/lib/webhook-url-guard";
 import { withRequestLogging } from "@/lib/request-logging";
 
-export const GET = withRequestLogging(async function GET(request: Request) {
+export const GET = withMetrics("GET /api/hooks", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -46,7 +47,7 @@ export const GET = withRequestLogging(async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/hooks");
   }
-});
+}));
 
 // ── POST /api/hooks ───────────────────────────────────────────
 
@@ -55,7 +56,7 @@ export const GET = withRequestLogging(async function GET(request: Request) {
  * The on-chain id (captured from the tx return value) is stored so Deactivate
  * can target unregister_hook at the correct contract record.
  */
-export const POST = withRequestLogging(async function POST(request: Request) {
+export const POST = withMetrics("POST /api/hooks", withRequestLogging(async function POST(request: Request) {
   try {
     const csrfError = verifyCsrf(request);
     if (csrfError) return csrfError;
@@ -86,4 +87,4 @@ export const POST = withRequestLogging(async function POST(request: Request) {
   } catch (err) {
     return handleApiError(err, "POST /api/hooks");
   }
-});
+}));

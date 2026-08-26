@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 /**
  * Wallet session endpoints.
@@ -25,7 +26,7 @@ import { successResponse, badRequestError, unauthorizedError } from "@/lib/api-r
 import { verifyCsrf } from "@/lib/csrf";
 import { withRequestLogging } from "@/lib/request-logging";
 
-export const POST = withRequestLogging(async function POST(request: Request) {
+export const POST = withMetrics("POST /api/auth/session", withRequestLogging(async function POST(request: Request) {
   const csrfError = verifyCsrf(request);
   if (csrfError) return csrfError;
 
@@ -80,10 +81,10 @@ export const POST = withRequestLogging(async function POST(request: Request) {
   const response = successResponse({ authenticated: true, publicKey, network });
   response.headers.set("Set-Cookie", buildSessionCookie(publicKey, network));
   return response;
-});
+}));
 
-export const DELETE = withRequestLogging(async function DELETE() {
+export const DELETE = withMetrics("DELETE /api/auth/session", withRequestLogging(async function DELETE() {
   const response = successResponse({ authenticated: false });
   response.headers.set("Set-Cookie", buildLogoutCookie());
   return response;
-});
+}));

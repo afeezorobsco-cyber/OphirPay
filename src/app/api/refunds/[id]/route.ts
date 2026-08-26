@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import prisma from "@/lib/prisma";
 import {
@@ -19,7 +20,7 @@ import { withRequestLogging } from "@/lib/request-logging";
  * on-chain transition (approve_refund / process_refund) succeeded, so the
  * Request → Approve → Process flow is reflected in the list.
  */
-export const PATCH = withRequestLogging(async function PATCH(
+export const PATCH = withMetrics("PATCH /api/refunds/[id]", withRequestLogging(async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -48,4 +49,4 @@ export const PATCH = withRequestLogging(async function PATCH(
   } catch (err) {
     return handleApiError(err, "PATCH /api/refunds/[id]");
   }
-});
+}));

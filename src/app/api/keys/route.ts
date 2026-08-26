@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import crypto from "crypto";
 import prisma from "@/lib/prisma";
@@ -16,7 +17,7 @@ import { withRequestLogging } from "@/lib/request-logging";
 /**
  * GET /api/keys — list the authenticated user's API keys (no hashes).
  */
-export const GET = withRequestLogging(async function GET(request: Request) {
+export const GET = withMetrics("GET /api/keys", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) return unauthorizedError("Authentication required.");
@@ -30,13 +31,13 @@ export const GET = withRequestLogging(async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/keys");
   }
-});
+}));
 
 /**
  * POST /api/keys — generate a new API key for the authenticated user.
  * The raw key is returned only once; only the hash is stored.
  */
-export const POST = withRequestLogging(async function POST(request: Request) {
+export const POST = withMetrics("POST /api/keys", withRequestLogging(async function POST(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) return unauthorizedError("Authentication required.");
@@ -64,12 +65,12 @@ export const POST = withRequestLogging(async function POST(request: Request) {
   } catch (err) {
     return handleApiError(err, "POST /api/keys");
   }
-});
+}));
 
 /**
  * DELETE /api/keys?id=... — revoke one of the authenticated user's keys.
  */
-export const DELETE = withRequestLogging(async function DELETE(request: Request) {
+export const DELETE = withMetrics("DELETE /api/keys", withRequestLogging(async function DELETE(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) return unauthorizedError("Authentication required.");
@@ -88,4 +89,4 @@ export const DELETE = withRequestLogging(async function DELETE(request: Request)
   } catch (err) {
     return handleApiError(err, "DELETE /api/keys");
   }
-});
+}));
