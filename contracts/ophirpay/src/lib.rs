@@ -2996,9 +2996,13 @@ impl OphirPayContract {
             return Err(PaymentError::StreamAlreadyCancelled);
         }
 
-        // Refund everything still locked: the total minus what has already been
-        // claimed. This is the invariant that preserves LOCKED_BALANCE.
-        let refundable = stream.total_amount.saturating_sub(stream.claimed_amount);
+        let now = env.ledger().timestamp();
+        let vested = compute_vested(stream.total_amount, stream.start_time, stream.end_time, now);
+
+        let unvested = stream
+            .total_amount
+            .saturating_sub(vested)
+            .saturating_sub(stream.claimed_amount);
 
         stream.cancelled = true;
         env.storage()
@@ -3008,12 +3012,12 @@ impl OphirPayContract {
             .persistent()
             .extend_ttl(&(STREAM_KEY, stream_id), 5000, 50000);
 
-        if refundable > 0 {
+        if unvested > 0 {
             // Reentrancy-guarded transfer (MEDIUM-4)
             let token_client = token::Client::new(&env, &stream.asset);
             let contract_addr = env.current_contract_address();
-            token_client.transfer(&contract_addr, &creator, &refundable);
-            add_locked(&env, -refundable);
+            token_client.transfer(&contract_addr, &creator, &unvested);
+            add_locked(&env, -unvested);
         }
 
         inc_counter(&env, &STAT_STR_CANCELLED);
@@ -3026,7 +3030,7 @@ impl OphirPayContract {
             "Stream cancelled",
         );
 
-        Ok(refundable)
+        Ok(unvested)
     }
 
     /// Get a stream by ID
