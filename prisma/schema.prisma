@@ -2,11 +2,15 @@
 // Documentation: https://pris.ly/d/prisma-schema
 //
 // ── Database Provider ──────────────────────────────────────
-// The provider is selected via the DATABASE_PROVIDER env var.
-// Supported values: "sqlite" | "postgresql"
+// The committed schema is the canonical PostgreSQL definition — the
+// datasource block below is hardcoded to PostgreSQL, and CI/production
+// run `npx prisma migrate deploy`. There is no runtime env-var-based
+// provider selection.
 //
-//   SQLite (dev):       DATABASE_PROVIDER=sqlite       npx prisma db push
-//   PostgreSQL (prod):  DATABASE_PROVIDER=postgresql   npx prisma migrate deploy
+// For local development on SQLite, follow the "SQLite ⇄ PostgreSQL
+// notes" below: swap the datasource block and drop the four
+// `@db.Decimal(18, 7)` annotations as LOCAL, UNCOMMITTED edits, then
+// run `npx prisma db push`.
 //
 // For PostgreSQL with connection pooling (e.g. Supabase, Neon),
 // set DIRECT_DATABASE_URL for migrations.
