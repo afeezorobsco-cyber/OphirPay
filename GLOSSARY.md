@@ -12,7 +12,7 @@ it should be here — if it isn't, please add it!
 | Term | Definition |
 |------|-----------|
 | **Lumen (XLM)** | The native asset of the Stellar network. "XLM" is the ticker; "lumen" is the name. Used for transaction fees, account reserves, and as the default payment asset in OphirPay (`assetCode: "XLM"`). |
-| **Stroop** | The smallest unit of a lumen: 1 XLM = 10,000,000 stroops (1 stroop = 1e-7 XLM). Stellar amounts are transmitted as integers in stroops; OphirPay converts via `XLM_STROOPS` in `src/lib/stellar.ts` and formats with `formatAmount()` in `src/lib/utils.ts`. |
+| **Stroop** | The smallest unit of a lumen: 1 XLM = 10,000,000 stroops (1 stroop = 1e-7 XLM). OphirPay's Soroban contract path represents amounts as integer stroops and converts them via `XLM_STROOPS` in `src/lib/stellar.ts`; its Horizon payment builders instead pass decimal XLM strings to the Stellar SDK. Amounts are formatted with `formatAmount()` in `src/lib/utils.ts`. |
 | **Native asset** | XLM itself, referred to as `"native"` in some payloads (e.g. `Refund.asset` defaults to `"native"`). |
 | **Issued asset** | Any non-native asset on Stellar (e.g. USDC), identified by its **asset code** + **issuer** account. OphirPay models this with `assetCode` + `assetIssuer` fields. |
 
@@ -25,7 +25,7 @@ it should be here — if it isn't, please add it!
 | **Mainnet (Public network)** | The live Stellar network where real funds move. Requires real XLM and production RPC/Horizon endpoints. |
 | **Friendbot** | A Stellar service that funds testnet accounts with free fake XLM (`friendbot` endpoint). Useful for onboarding new developers. |
 | **Horizon** | Stellar's REST API server for reading ledger data and submitting transactions. OphirPay wraps it via `getHorizonServer()` in `src/lib/stellar.ts`. |
-| **Soroban RPC** | The JSON-RPC endpoint for Soroban smart-contract interactions — `simulateTransaction`, `sendTransaction`, `getTransaction`, `getContractData`, etc. OphirPay wraps it in `src/lib/rpc-failover.ts` and `src/lib/contracts.ts`. |
+| **Soroban RPC** | The JSON-RPC endpoint for Soroban smart-contract interactions — `simulateTransaction`, `sendTransaction`, `getTransaction`, `getContractData`, etc. OphirPay's active runtime wrapper is `getSorobanServer()` in `src/lib/stellar.ts`, used by the contract reads/writes in `src/lib/contracts.ts`. |
 | **Ledger** | A closed block of the Stellar chain. Accounts, balances, and contract state are all derived from ledger entries. Each transaction references the ledger sequence it lands in. |
 | **Sequence number** | A per-account counter that increments with every transaction. Every transaction must specify the source account's current sequence number; this prevents replay of old transactions. |
 | **Network passphrase** | A string identifying the network ("Test SDF Network ; September 2015" for testnet, "Public Global Stellar Network ; September 2015" for mainnet). Used when signing transaction envelopes. See `NETWORK_PASSPHRASE` in `src/lib/stellar.ts`. |
@@ -41,7 +41,7 @@ it should be here — if it isn't, please add it!
 | **Memo** | An optional 28-byte field attached to a payment (e.g. an order ID or reference). Useful for reconciliation. OphirPay validates `memo` length ≤ 28 in its schemas and displays memos on payments. |
 | **Trustline** | An account-level record that says "I accept this issued asset." You must hold a trustline for an asset before receiving it. OphirPay's trustline tooling lives in `src/lib/trustline.ts`. |
 | **Sponsored reserves / sponsorship** | A mechanism where one account pays the minimum-balance reserve for another account (or for that account's trustlines/data entries), enabling "no-balance" onboarding. Relevant when an app creates accounts or trustlines on behalf of users. |
-| **Reserve** | The minimum XLM balance an account must hold (currently 0.5 XLM per account plus 0.5 XLM per trustline/data entry). Transactions that would drop an account below its reserve fail. |
+| **Reserve** | The minimum XLM balance an account must hold (currently 1 XLM for a basic account, plus 0.5 XLM per additional trustline/data entry). Transactions that would drop an account below its reserve fail. |
 
 ## Soroban (smart contracts)
 
@@ -52,9 +52,9 @@ it should be here — if it isn't, please add it!
 | **SAC (Stellar Asset Contract)** | The built-in contract that wraps a Stellar asset, giving issued assets a token interface (balance, transfer, etc.). Soroban contracts interact with assets through the SAC. |
 | **Contract invocation** | Calling a function on a deployed contract. Reads use `simulateContractCall`; writes build, sign, and submit a transaction via `invokeContractFunction` + `submitContractInvocation` (see `src/lib/contracts.ts`). |
 | **Simulation (`simulateTransaction`)** | Running a contract call against a copy of current state to learn its effects (and the fee) without submitting anything. OphirPay reads on-chain data this way (`fetchOnChainPayments`, contract reads in `src/lib/contracts.ts`). |
-| **Emitter contract** | A helper contract that emits events OphirPay subscribes to for real-time payment notifications (`contracts/emitter`, consumed by `src/lib/contract-events.ts` and the `/api/events` SSE stream). |
+| **Emitter contract** | A helper contract that emits events OphirPay subscribes to for real-time payment notifications (`contracts/emitter`). The `/api/events` SSE route polls the emitter contract directly via Soroban simulation. |
 | **Contract ID** | The address of a deployed contract instance (starts with `C`). Configured via `NEXT_PUBLIC_CONTRACT_ID` / `NEXT_PUBLIC_EMITTER_CONTRACT_ID`. |
-| **Contract data (`getContractData`)** | Reading a key-value entry from a contract's storage — how OphirPay enumerates on-chain payments, escrows, streams, proposals, etc. |
+| **Contract data (`getContractData`)** | Reading a key-value entry directly from a contract's storage. OphirPay enumerates on-chain payments, escrows, streams, and proposals by invoking contract getter functions through transaction simulation instead (e.g. `fetchOnChainPayments` in `src/lib/contracts.ts`). |
 
 ## Payments & flows
 
@@ -74,5 +74,5 @@ it should be here — if it isn't, please add it!
 | Term | Definition |
 |------|-----------|
 | **Webhook** | An outbound HTTP callback OphirPay sends when an event occurs. Payloads are signed with an HMAC-SHA256 secret (`signWebhookPayload` in `src/lib/webhook-deliver.ts`) so receivers can verify authenticity. |
-| **On-chain ID (`onChainId`)** | A contract-returned `u64` id (refund id, hook id, payment id) that links a DB ledger row to its on-chain Soroban record. |
+| **On-chain ID (`onChainId`)** | A contract-returned `u64` id used by refunds and notification hooks to link a DB ledger row to its on-chain Soroban record (see `Refund.onChainId` / `NotificationHook.onChainId`). |
 | **CUID** | The ID format Prisma generates for DB primary keys (`@default(cuid())`) — collision-resistant, URL-safe strings. |
