@@ -9,10 +9,7 @@
 //! 2. Include reentrancy-shaped call sequences asserting ReentrantCall rejection.
 //! 3. Runs in CI with bounded iterations (ProptestConfig::with_cases(64)).
 
-use ophirpay_contract::{
-    Escrow, OphirPayContract, OphirPayContractClient, PaymentError, RefundReasonCode, RefundStatus,
-    Stream,
-};
+use ophirpay_contract::{OphirPayContract, OphirPayContractClient, PaymentError};
 use proptest::prelude::*;
 use proptest::test_runner::Config as ProptestConfig;
 use soroban_sdk::testutils::{Address as _, Ledger as _};
@@ -28,6 +25,7 @@ fn get_proptest_config() -> ProptestConfig {
     }
 }
 
+#[allow(dead_code)]
 struct PropHarness<'a> {
     env: Env,
     contract_id: Address,

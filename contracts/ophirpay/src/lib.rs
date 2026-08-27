@@ -871,13 +871,13 @@ struct ReentrancyGuard<'a> {
     env: &'a Env,
 }
 
-impl<'a> Drop for ReentrancyGuard<'a> {
+impl Drop for ReentrancyGuard<'_> {
     fn drop(&mut self) {
         release_reentrancy_lock(self.env);
     }
 }
 
-fn acquire_reentrancy_lock(env: &Env) -> Result<ReentrancyGuard, PaymentError> {
+fn acquire_reentrancy_lock<'a>(env: &'a Env) -> Result<ReentrancyGuard<'a>, PaymentError> {
     let locked: bool = env
         .storage()
         .instance()
