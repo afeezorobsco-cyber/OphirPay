@@ -29,13 +29,9 @@ fn test_batch_payment_happy_path() {
     amounts.push_back(150_000i128);
 
     let tx_hash = String::from_str(&fix.env, "0xbatch_tx_hash_123");
-    let result = fix.client.create_batch(
-        &creator,
-        &payees,
-        &amounts,
-        &fix.token_id,
-        &tx_hash,
-    );
+    let result = fix
+        .client
+        .create_batch(&creator, &payees, &amounts, &fix.token_id, &tx_hash);
 
     assert_eq!(result.batch_id, 1);
     assert_eq!(result.total_requests, 4);
@@ -88,13 +84,9 @@ fn test_batch_payment_partial_failure_handling() {
     amounts.push_back(300_000i128);
 
     let tx_hash = String::from_str(&fix.env, "0xpartial_batch");
-    let result = fix.client.create_batch(
-        &creator,
-        &payees,
-        &amounts,
-        &fix.token_id,
-        &tx_hash,
-    );
+    let result = fix
+        .client
+        .create_batch(&creator, &payees, &amounts, &fix.token_id, &tx_hash);
 
     assert_eq!(result.batch_id, 1);
     assert_eq!(result.total_requests, 3);
@@ -117,16 +109,15 @@ fn test_batch_empty_and_overflow_errors() {
     let empty_amounts = Vec::new(&fix.env);
     let tx_hash = String::from_str(&fix.env, "0xempty");
 
-    assert_eq!(
-        fix.client.try_create_batch(
-            &creator,
-            &empty_payees,
-            &empty_amounts,
-            &fix.token_id,
-            &tx_hash,
-        ),
-        Err(Ok(PaymentError::BatchEmpty))
+    let res = fix.client.try_create_batch(
+        &creator,
+        &empty_payees,
+        &empty_amounts,
+        &fix.token_id,
+        &tx_hash,
     );
+    assert!(res.is_err());
+    assert_eq!(res.err().unwrap().unwrap(), PaymentError::BatchEmpty);
 
     // All zero amounts
     let mut payees = Vec::new(&fix.env);
@@ -134,14 +125,9 @@ fn test_batch_empty_and_overflow_errors() {
     let mut zero_amounts = Vec::new(&fix.env);
     zero_amounts.push_back(0i128);
 
-    assert_eq!(
-        fix.client.try_create_batch(
-            &creator,
-            &payees,
-            &zero_amounts,
-            &fix.token_id,
-            &tx_hash,
-        ),
-        Err(Ok(PaymentError::BatchEmpty))
-    );
+    let res =
+        fix.client
+            .try_create_batch(&creator, &payees, &zero_amounts, &fix.token_id, &tx_hash);
+    assert!(res.is_err());
+    assert_eq!(res.err().unwrap().unwrap(), PaymentError::BatchEmpty);
 }

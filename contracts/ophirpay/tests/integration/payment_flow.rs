@@ -2,7 +2,7 @@
 #![cfg(test)]
 
 use super::TestFixture;
-use ophirpay_contract::{PaymentError, Role};
+use ophirpay_contract::PaymentError;
 use soroban_sdk::testutils::{Address as _, Ledger as _};
 use soroban_sdk::{Address, String};
 
@@ -88,10 +88,9 @@ fn test_payment_cancellation_lifecycle() {
     );
 
     // Stranger cannot cancel payment
-    assert_eq!(
-        fix.client.try_cancel_payment(&stranger, &pid),
-        Err(Ok(PaymentError::Unauthorized))
-    );
+    let res = fix.client.try_cancel_payment(&stranger, &pid);
+    assert!(res.is_err());
+    assert_eq!(res.err().unwrap().unwrap(), PaymentError::Unauthorized);
 
     // Owner cancels payment successfully
     fix.client.cancel_payment(&fix.owner, &pid);
@@ -99,9 +98,11 @@ fn test_payment_cancellation_lifecycle() {
     assert_eq!(payment.cancelled, true);
 
     // Duplicate cancellation fails
+    let res = fix.client.try_cancel_payment(&fix.owner, &pid);
+    assert!(res.is_err());
     assert_eq!(
-        fix.client.try_cancel_payment(&fix.owner, &pid),
-        Err(Ok(PaymentError::PaymentAlreadyCancelled))
+        res.err().unwrap().unwrap(),
+        PaymentError::PaymentAlreadyCancelled
     );
 }
 
@@ -125,41 +126,30 @@ fn test_atomic_spend_with_limits_and_rbac() {
     // Spend within limit
     let tx1 = String::from_str(&fix.env, "0xspend1");
     let meta1 = String::from_str(&fix.env, "spend 1");
-    let pid1 = fix.client.atomic_spend(
-        &payer,
-        &payee,
-        &6_000_000i128,
-        &fix.token_id,
-        &tx1,
-        &meta1,
-    );
+    let pid1 = fix
+        .client
+        .atomic_spend(&payer, &payee, &6_000_000i128, &fix.token_id, &tx1, &meta1);
     assert_eq!(pid1, 1);
 
     // Second spend exceeding daily limit fails
     let tx2 = String::from_str(&fix.env, "0xspend2");
     let meta2 = String::from_str(&fix.env, "spend 2");
+    let res =
+        fix.client
+            .try_atomic_spend(&payer, &payee, &5_000_000i128, &fix.token_id, &tx2, &meta2);
+    assert!(res.is_err());
     assert_eq!(
-        fix.client.try_atomic_spend(
-            &payer,
-            &payee,
-            &5_000_000i128,
-            &fix.token_id,
-            &tx2,
-            &meta2,
-        ),
-        Err(Ok(PaymentError::SpendingLimitExpired))
+        res.err().unwrap().unwrap(),
+        PaymentError::SpendingLimitExpired
     );
 
     // Fast-forward 1 day: daily spend resets, spend succeeds
-    fix.env.ledger().set_timestamp(fix.env.ledger().timestamp() + 86401);
-    let pid2 = fix.client.atomic_spend(
-        &payer,
-        &payee,
-        &4_000_000i128,
-        &fix.token_id,
-        &tx2,
-        &meta2,
-    );
+    fix.env
+        .ledger()
+        .set_timestamp(fix.env.ledger().timestamp() + 86401);
+    let pid2 = fix
+        .client
+        .atomic_spend(&payer, &payee, &4_000_000i128, &fix.token_id, &tx2, &meta2);
     assert_eq!(pid2, 2);
 
     // Verify audit logs recorded both atomic spend actions
@@ -179,29 +169,18 @@ fn test_paused_contract_blocks_payments() {
 
     let tx = String::from_str(&fix.env, "0xpaused");
     let meta = String::from_str(&fix.env, "meta");
-    assert_eq!(
-        fix.client.try_record_payment(
-            &payer,
-            &payee,
-            &100i128,
-            &fix.token_id,
-            &tx,
-            &meta,
-        ),
-        Err(Ok(PaymentError::ContractPaused))
-    );
+    let res = fix
+        .client
+        .try_record_payment(&payer, &payee, &100i128, &fix.token_id, &tx, &meta);
+    assert!(res.is_err());
+    assert_eq!(res.err().unwrap().unwrap(), PaymentError::ContractPaused);
 
     // Unpause contract
     fix.client.emergency_unpause_all(&fix.owner);
     assert_eq!(fix.client.is_paused(), false);
 
-    let pid = fix.client.record_payment(
-        &payer,
-        &payee,
-        &100i128,
-        &fix.token_id,
-        &tx,
-        &meta,
-    );
+    let pid = fix
+        .client
+        .record_payment(&payer, &payee, &100i128, &fix.token_id, &tx, &meta);
     assert_eq!(pid, 1);
 }

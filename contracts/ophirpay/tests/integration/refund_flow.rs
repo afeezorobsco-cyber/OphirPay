@@ -65,9 +65,11 @@ fn test_refund_lifecycle_approval_and_processing() {
     assert_eq!(processed_refund.status, RefundStatus::Processed);
 
     // Reprocessing fails
+    let res = fix.client.try_process_refund(&fix.owner, &refund_id);
+    assert!(res.is_err());
     assert_eq!(
-        fix.client.try_process_refund(&fix.owner, &refund_id),
-        Err(Ok(PaymentError::RefundAlreadyProcessed))
+        res.err().unwrap().unwrap(),
+        PaymentError::RefundAlreadyProcessed
     );
 }
 
@@ -91,30 +93,28 @@ fn test_refund_rejection_and_guards() {
 
     // Stranger cannot request refund
     let reason = String::from_str(&fix.env, "I want free money");
-    assert_eq!(
-        fix.client.try_request_refund(
-            &stranger,
-            &payment_id,
-            &1_000_000i128,
-            &fix.token_id,
-            &reason,
-            &RefundReasonCode::Other,
-        ),
-        Err(Ok(PaymentError::Unauthorized))
+    let res = fix.client.try_request_refund(
+        &stranger,
+        &payment_id,
+        &1_000_000i128,
+        &fix.token_id,
+        &reason,
+        &RefundReasonCode::Other,
     );
+    assert!(res.is_err());
+    assert_eq!(res.err().unwrap().unwrap(), PaymentError::Unauthorized);
 
     // Amount exceeding payment amount fails
-    assert_eq!(
-        fix.client.try_request_refund(
-            &payer,
-            &payment_id,
-            &2_000_000i128,
-            &fix.token_id,
-            &reason,
-            &RefundReasonCode::ProductDefect,
-        ),
-        Err(Ok(PaymentError::InvalidAmount))
+    let res = fix.client.try_request_refund(
+        &payer,
+        &payment_id,
+        &2_000_000i128,
+        &fix.token_id,
+        &reason,
+        &RefundReasonCode::ProductDefect,
     );
+    assert!(res.is_err());
+    assert_eq!(res.err().unwrap().unwrap(), PaymentError::InvalidAmount);
 
     // Payee requests valid refund
     let valid_reason = String::from_str(&fix.env, "Duplicate charge");
@@ -133,9 +133,11 @@ fn test_refund_rejection_and_guards() {
     assert_eq!(rejected.status, RefundStatus::Rejected);
 
     // Processing a rejected refund fails
+    let res = fix.client.try_process_refund(&fix.owner, &refund_id);
+    assert!(res.is_err());
     assert_eq!(
-        fix.client.try_process_refund(&fix.owner, &refund_id),
-        Err(Ok(PaymentError::RefundAlreadyProcessed))
+        res.err().unwrap().unwrap(),
+        PaymentError::RefundAlreadyProcessed
     );
 }
 
@@ -169,14 +171,8 @@ fn test_refund_reason_code_analytics() {
 
     for code in codes.iter() {
         let reason_str = String::from_str(&fix.env, "reason");
-        fix.client.request_refund(
-            &payer,
-            &pid,
-            &100_000i128,
-            &fix.token_id,
-            &reason_str,
-            code,
-        );
+        fix.client
+            .request_refund(&payer, &pid, &100_000i128, &fix.token_id, &reason_str, code);
     }
 
     let analytics = fix.client.get_reason_code_analytics();

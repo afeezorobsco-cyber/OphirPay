@@ -66,23 +66,23 @@ fn test_governance_proposal_passing_flow() {
     fix.client.vote_on_proposal(&voter_3, &1, &false);
 
     // Duplicate vote attempt fails
-    assert_eq!(
-        fix.client.try_vote_on_proposal(&voter_1, &1, &true),
-        Err(Ok(PaymentError::AlreadyVoted))
-    );
+    let res = fix.client.try_vote_on_proposal(&voter_1, &1, &true);
+    assert!(res.is_err());
+    assert_eq!(res.err().unwrap().unwrap(), PaymentError::AlreadyVoted);
 
     let proposal_after_votes = fix.client.get_proposal(&1);
     assert_eq!(proposal_after_votes.yes_votes, 2);
     assert_eq!(proposal_after_votes.no_votes, 1);
 
     // 5. Early execution fails before voting period ends
-    assert_eq!(
-        fix.client.try_execute_proposal(&1),
-        Err(Ok(PaymentError::VotingPeriodEnded))
-    );
+    let res = fix.client.try_execute_proposal(&1);
+    assert!(res.is_err());
+    assert_eq!(res.err().unwrap().unwrap(), PaymentError::VotingPeriodEnded);
 
     // 6. Fast-forward time past voting period (24h + 1s)
-    fix.env.ledger().set_timestamp(fix.env.ledger().timestamp() + 86401);
+    fix.env
+        .ledger()
+        .set_timestamp(fix.env.ledger().timestamp() + 86401);
 
     // 7. Execute proposal
     let passed = fix.client.execute_proposal(&1);
@@ -96,9 +96,11 @@ fn test_governance_proposal_passing_flow() {
     assert_eq!(fix.token_client.balance(&proposer), 1_000_000);
 
     // Double execution fails
+    let res = fix.client.try_execute_proposal(&1);
+    assert!(res.is_err());
     assert_eq!(
-        fix.client.try_execute_proposal(&1),
-        Err(Ok(PaymentError::ProposalAlreadyExecuted))
+        res.err().unwrap().unwrap(),
+        PaymentError::ProposalAlreadyExecuted
     );
 }
 
@@ -109,13 +111,8 @@ fn test_governance_proposal_defeated_flow() {
     let voter_1 = Address::generate(&fix.env);
     let voter_2 = Address::generate(&fix.env);
 
-    fix.client.configure_governance(
-        &fix.owner,
-        &100_000i128,
-        &3600u64,
-        &1000u32,
-        &true,
-    );
+    fix.client
+        .configure_governance(&fix.owner, &100_000i128, &3600u64, &1000u32, &true);
 
     fix.mint(&proposer, 200_000);
 
@@ -140,7 +137,9 @@ fn test_governance_proposal_defeated_flow() {
     fix.client.vote_on_proposal(&voter_1, &pid, &false);
     fix.client.vote_on_proposal(&voter_2, &pid, &false);
 
-    fix.env.ledger().set_timestamp(fix.env.ledger().timestamp() + 3601);
+    fix.env
+        .ledger()
+        .set_timestamp(fix.env.ledger().timestamp() + 3601);
 
     // Defeated proposal returns false
     let passed = fix.client.execute_proposal(&pid);

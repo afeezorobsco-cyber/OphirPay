@@ -17,7 +17,10 @@ fn test_cross_contract_emitter_linking_and_events() {
 
     // Set allow-list on emitter to only accept OphirPay
     emitter_client.set_allowed_source(&fix.owner, &Some(fix.contract_id.clone()));
-    assert_eq!(emitter_client.get_allowed_source(), Some(fix.contract_id.clone()));
+    assert_eq!(
+        emitter_client.get_allowed_source(),
+        Some(fix.contract_id.clone())
+    );
 
     // Emit event directly from owner (allowed by owner bypass)
     let payer = Address::generate(&fix.env);
@@ -25,14 +28,8 @@ fn test_cross_contract_emitter_linking_and_events() {
     let source = String::from_str(&fix.env, "OphirPay");
     let tx_hash = String::from_str(&fix.env, "0xemit_1");
 
-    let event_id = emitter_client.emit_payment(
-        &fix.owner,
-        &source,
-        &payer,
-        &payee,
-        &500_000i128,
-        &tx_hash,
-    );
+    let event_id =
+        emitter_client.emit_payment(&fix.owner, &source, &payer, &payee, &500_000i128, &tx_hash);
     assert_eq!(event_id, 1);
     assert_eq!(emitter_client.get_event_count(), 1);
 
@@ -64,17 +61,10 @@ fn test_cross_contract_emergency_pause_orchestration() {
     let source = String::from_str(&fix.env, "OphirPay");
     let tx_hash = String::from_str(&fix.env, "0xpaused_emit");
 
-    assert_eq!(
-        emitter_client.try_emit_payment(
-            &fix.owner,
-            &source,
-            &payer,
-            &payee,
-            &100i128,
-            &tx_hash,
-        ),
-        Err(Ok(EmitterError::ContractPaused))
-    );
+    let res =
+        emitter_client.try_emit_payment(&fix.owner, &source, &payer, &payee, &100i128, &tx_hash);
+    assert!(res.is_err());
+    assert_eq!(res.err().unwrap().unwrap(), EmitterError::ContractPaused);
 
     // Emergency unpause all
     fix.client.emergency_unpause_all(&fix.owner);
@@ -82,13 +72,7 @@ fn test_cross_contract_emergency_pause_orchestration() {
     assert_eq!(emitter_client.is_paused(), false);
 
     // Emitting succeeds again
-    let evt_id = emitter_client.emit_payment(
-        &fix.owner,
-        &source,
-        &payer,
-        &payee,
-        &100i128,
-        &tx_hash,
-    );
+    let evt_id =
+        emitter_client.emit_payment(&fix.owner, &source, &payer, &payee, &100i128, &tx_hash);
     assert_eq!(evt_id, 1);
 }

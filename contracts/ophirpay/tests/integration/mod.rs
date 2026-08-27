@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 #![cfg(test)]
 
-pub mod payment_flow;
 pub mod batch_flow;
-pub mod refund_flow;
-pub mod governance_flow;
 pub mod emitter_flow;
+pub mod governance_flow;
+pub mod payment_flow;
+pub mod refund_flow;
 
 use ophirpay_contract::{OphirPayContract, OphirPayContractClient};
 use ophirpay_emitter::{PaymentEventEmitter, PaymentEventEmitterClient};
@@ -32,7 +32,9 @@ impl<'a> TestFixture<'a> {
         let owner = Address::generate(&env);
         let token_admin = Address::generate(&env);
 
-        let token_id = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+        let token_id = env
+            .register_stellar_asset_contract_v2(token_admin.clone())
+            .address();
         let token_client = token::Client::new(&env, &token_id);
         let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
 
