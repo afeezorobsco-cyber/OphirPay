@@ -121,6 +121,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Cross-contract orchestration** (atomic pause_all) | ✅ | ❌ |
 | **Policy versioning** (immutable config history) | ✅ | ❌ |
 | **Two-step admin rotation** (24h timelock) | ✅ | ❌ |
+| **In-app notification center** (bell, unread count, live SSE updates, session persistence) | ✅ | ❌ |
 
 > All features above have dashboard UI pages. See [roadmap](#-roadmap) for details.
 
