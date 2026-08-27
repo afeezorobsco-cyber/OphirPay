@@ -369,6 +369,10 @@ Visit **`/events`** in the app to see the live feed with connection status indic
 
 OphirPay deploys **two Soroban contracts**. The main `OphirPayContract` handles all payment logic and publishes native on-chain events, while the `PaymentEventEmitter` stores payment-event records that the app's SSE stream queries — keeping payment logic and event emission separate for cleaner architecture and independent queryability. The contracts are also wired for cross-contract orchestration: `emergency_pause_all` / `emergency_unpause_all` atomically propagate the circuit breaker to the emitter.
 
+> 📖 **Deep dive**: see [docs/CONTRACT_ARCHITECTURE.md](docs/CONTRACT_ARCHITECTURE.md) for how
+> OphirPay invokes the Emitter via `env.invoke_contract`, why the concerns are
+> split, and how to extend the pattern to new contracts.
+
 ### 🔗 Inter-Contract Flow
 
 ```
