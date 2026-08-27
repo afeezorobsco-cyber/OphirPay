@@ -12,6 +12,7 @@ use ophirpay_emitter::{PaymentEventEmitter, PaymentEventEmitterClient};
 use soroban_sdk::testutils::{Address as _, Ledger as _};
 use soroban_sdk::{token, Address, Env};
 
+#[allow(dead_code)]
 pub struct TestFixture<'a> {
     pub env: Env,
     pub contract_id: Address,
@@ -54,7 +55,7 @@ impl<'a> TestFixture<'a> {
         }
     }
 
-    pub fn setup_emitter(&self) -> (Address, PaymentEventEmitterClient<'a>) {
+    pub fn setup_emitter(&self) -> (Address, PaymentEventEmitterClient<'_>) {
         let emitter_id = self.env.register(PaymentEventEmitter, ());
         let emitter_client = PaymentEventEmitterClient::new(&self.env, &emitter_id);
         emitter_client.init(&self.owner);
