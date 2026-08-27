@@ -297,6 +297,11 @@ jobs:
         with:
           name: contract-wasm
           path: contracts/
+      - name: Recreate target directories for tests
+        run: |
+          mkdir -p contracts/ophirpay/target/wasm32v1-none/release contracts/emitter/target/wasm32v1-none/release
+          find contracts -name "ophirpay_contract.wasm" -exec cp {} contracts/ophirpay/target/wasm32v1-none/release/ \;
+          find contracts -name "ophirpay_emitter.wasm" -exec cp {} contracts/emitter/target/wasm32v1-none/release/ \;
       - name: Apply migrations to test DB
         run: npx prisma migrate deploy
       - name: Build Next.js production bundle
