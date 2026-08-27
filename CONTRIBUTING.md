@@ -72,6 +72,25 @@ npm run typecheck     # TypeScript check
 npm run lint          # ESLint
 ```
 
+## Changelog
+
+Every user-facing change must be recorded in [`CHANGELOG.md`](CHANGELOG.md).
+The file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) with
+[Semantic Versioning](https://semver.org/).
+
+- Read the [Changelog Maintenance Guide](docs/CHANGELOG_GUIDE.md) before adding
+  or updating an entry — it documents the category conventions (Added / Changed /
+  Fixed / Removed / Security) with examples and the release flow.
+- Add entries under the existing `## [Unreleased]` section in the same PR as the
+  change. Do not create a new `[Unreleased]` heading per PR.
+- Internal changes (refactors with no observable behavior change, test-only
+  changes, CI plumbing) do not need an entry.
+- Reviewers will ask for an entry on any user-facing change; treat a missing
+  entry as a review-blocking item.
+
+See the [release flow](docs/CHANGELOG_GUIDE.md#6-release-flow) in the guide for
+how versions are chosen and releases are cut.
+
 ## Smart Contracts
 
 Contracts are in `contracts/`. Build with:
