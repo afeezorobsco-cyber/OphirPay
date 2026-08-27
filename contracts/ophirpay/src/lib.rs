@@ -2999,10 +2999,7 @@ impl OphirPayContract {
         let now = env.ledger().timestamp();
         let vested = compute_vested(stream.total_amount, stream.start_time, stream.end_time, now);
 
-        let unvested = stream
-            .total_amount
-            .saturating_sub(vested)
-            .saturating_sub(stream.claimed_amount);
+        let unvested = stream.total_amount.saturating_sub(vested);
 
         stream.cancelled = true;
         env.storage()
