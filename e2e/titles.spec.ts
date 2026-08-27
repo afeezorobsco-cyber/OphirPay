@@ -19,6 +19,12 @@ const ROUTE_TITLES: Record<string, RegExp> = {
   "/analytics": /^Analytics \| OphirPay$/,
   "/events": /^Event Stream \| OphirPay$/,
   "/audit-log": /^Audit Log \| OphirPay$/,
+  "/hooks": /^Notification Hooks \| OphirPay$/,
+  "/rbac": /^Access Control \(RBAC\) \| OphirPay$/,
+  "/fee-config": /^Fee Configuration \| OphirPay$/,
+  "/refunds": /^Refunds \| OphirPay$/,
+  "/timelock": /^Timelock \| OphirPay$/,
+  "/policy-versions": /^Policy Versions \| OphirPay$/,
   "/multisig": /^Multisig \| OphirPay$/,
   "/governance": /^Governance \| OphirPay$/,
 };
