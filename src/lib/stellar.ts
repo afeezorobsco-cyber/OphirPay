@@ -172,6 +172,173 @@ export interface SubmitResult {
   successful: boolean;
 }
 
+// ── Asset Utilities ────────────────────────────────────────────
+
+/**
+ * Creates an Asset instance from an asset code and optional issuer.
+ * Defaults to native XLM if code is "XLM", "native", or issuer is missing.
+ */
+export function createAsset(code?: string, issuer?: string): Asset {
+  if (!code || code === "XLM" || code === "native" || !issuer) {
+    return Asset.native();
+  }
+  return new Asset(code, issuer);
+}
+
+// ── Path Payment Calculations & Horizon Path Discovery ─────────
+
+/**
+ * Calculate the exchange rate between send amount and destination amount.
+ * Rate = destAmount / sendAmount (e.g. 1 Source Asset = X Dest Asset).
+ */
+export function calculateExchangeRate(
+  sendAmount: string | number,
+  destAmount: string | number,
+): number {
+  const send = typeof sendAmount === "string" ? parseFloat(sendAmount) : sendAmount;
+  const dest = typeof destAmount === "string" ? parseFloat(destAmount) : destAmount;
+  if (!send || isNaN(send) || isNaN(dest) || send <= 0) return 0;
+  return dest / send;
+}
+
+/**
+ * Calculate the minimum destination amount with slippage tolerance.
+ * Default slippage is 1% (0.01).
+ */
+export function calculateDestMin(
+  destAmount: string | number,
+  slippageTolerance = 0.01,
+): string {
+  const dest = typeof destAmount === "string" ? parseFloat(destAmount) : destAmount;
+  if (!dest || isNaN(dest) || dest <= 0) return "0";
+  const min = Math.max(0, dest * (1 - slippageTolerance));
+  return min.toFixed(7);
+}
+
+export interface PathPaymentEstimate {
+  sourceAsset: { code: string; issuer?: string; type: string };
+  destAsset: { code: string; issuer?: string; type: string };
+  sourceAmount: string;
+  destinationAmount: string;
+  destMin: string;
+  exchangeRate: number;
+  path: Asset[];
+  pathAssets: Array<{ code: string; issuer?: string; type: string }>;
+}
+
+/**
+ * Discover strict-send payment paths via Horizon and return rate estimate.
+ * Finds paths from sourceAsset -> destAsset and returns the best rate.
+ */
+export async function findStrictSendPath(params: {
+  sourceAssetCode: string;
+  sourceAssetIssuer?: string;
+  sendAmount: string;
+  destAssetCode: string;
+  destAssetIssuer?: string;
+  destinationAddress?: string;
+  slippageTolerance?: number;
+}): Promise<PathPaymentEstimate | null> {
+  const {
+    sourceAssetCode,
+    sourceAssetIssuer,
+    sendAmount,
+    destAssetCode,
+    destAssetIssuer,
+    destinationAddress,
+    slippageTolerance = 0.01,
+  } = params;
+
+  if (!sendAmount || parseFloat(sendAmount) <= 0) {
+    return null;
+  }
+
+  const server = getHorizonServer();
+  const sourceAsset = createAsset(sourceAssetCode, sourceAssetIssuer);
+  const destAsset = createAsset(destAssetCode, destAssetIssuer);
+
+  try {
+    const destinationTarget =
+      destinationAddress && isValidStellarAddress(destinationAddress)
+        ? destinationAddress
+        : [destAsset];
+
+    const response = await server
+      .strictSendPaths(sourceAsset, sendAmount, destinationTarget)
+      .call();
+
+    if (!response || !response.records || response.records.length === 0) {
+      return null;
+    }
+
+    // Filter matching destination asset if destination was queried by account
+    const matchingRecords = response.records.filter((rec) => {
+      if (destAsset.isNative()) {
+        return rec.destination_asset_type === "native";
+      }
+      return (
+        rec.destination_asset_code === destAsset.getCode() &&
+        rec.destination_asset_issuer === destAsset.getIssuer()
+      );
+    });
+
+    const recordsToUse = matchingRecords.length > 0 ? matchingRecords : response.records;
+    if (recordsToUse.length === 0) return null;
+
+    // Pick best path offering the highest destination amount
+    const bestRecord = recordsToUse.reduce((best, current) => {
+      const bestAmt = parseFloat(best.destination_amount);
+      const currAmt = parseFloat(current.destination_amount);
+      return currAmt > bestAmt ? current : best;
+    }, recordsToUse[0]);
+
+    const destAmount = bestRecord.destination_amount;
+    if (!destAmount || parseFloat(destAmount) <= 0) return null;
+
+    const pathAssets: Array<{ code: string; issuer?: string; type: string }> = [];
+    const path: Asset[] = [];
+
+    if (bestRecord.path && Array.isArray(bestRecord.path)) {
+      for (const p of bestRecord.path) {
+        const asset =
+          p.asset_type === "native"
+            ? Asset.native()
+            : new Asset(p.asset_code, p.asset_issuer);
+        path.push(asset);
+        pathAssets.push({
+          code: p.asset_type === "native" ? "XLM" : p.asset_code,
+          issuer: p.asset_issuer,
+          type: p.asset_type,
+        });
+      }
+    }
+
+    const exchangeRate = calculateExchangeRate(sendAmount, destAmount);
+    const destMin = calculateDestMin(destAmount, slippageTolerance);
+
+    return {
+      sourceAsset: {
+        code: sourceAsset.isNative() ? "XLM" : sourceAsset.getCode(),
+        issuer: sourceAsset.isNative() ? undefined : sourceAsset.getIssuer(),
+        type: sourceAsset.getAssetType(),
+      },
+      destAsset: {
+        code: destAsset.isNative() ? "XLM" : destAsset.getCode(),
+        issuer: destAsset.isNative() ? undefined : destAsset.getIssuer(),
+        type: destAsset.getAssetType(),
+      },
+      sourceAmount: sendAmount,
+      destinationAmount: destAmount,
+      destMin,
+      exchangeRate,
+      path,
+      pathAssets,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ── Transaction Building & Submission ──────────────────────────
 
 export interface BuildTxResult {
@@ -180,7 +347,7 @@ export interface BuildTxResult {
 }
 
 /**
- * Build an unsigned payment transaction (XLM or custom asset).
+ * Build an unsigned payment transaction (XLM, custom asset, or cross-asset path payment).
  * Returns the XDR string — the caller must sign it (e.g. via Freighter).
  * The transaction expires after 5 minutes.
  */
@@ -199,6 +366,10 @@ export async function buildPaymentTx(params: {
   sponsorCreate?: boolean;
   /** Starting balance in XLM for the sponsored account (min 1 XLM). */
   startingBalance?: string;
+  destAssetCode?: string;
+  destAssetIssuer?: string;
+  destMin?: string;
+  path?: Asset[];
 }): Promise<BuildTxResult> {
   const {
     sourcePublicKey,
@@ -209,17 +380,36 @@ export async function buildPaymentTx(params: {
     assetIssuer,
     sponsorCreate = false,
     startingBalance = SPONSOR_MIN_STARTING_BALANCE,
+    destAssetCode,
+    destAssetIssuer,
+    destMin,
+    path,
   } = params;
+
+  const isCrossAsset =
+    Boolean(destAssetCode) &&
+    (destAssetCode !== assetCode || destAssetIssuer !== assetIssuer);
+
+  if (isCrossAsset && destAssetCode) {
+    return buildPathPaymentStrictSendTx({
+      sourcePublicKey,
+      destination,
+      sendAmount: amount,
+      destMin: destMin || calculateDestMin(amount),
+      sourceAssetCode: assetCode,
+      sourceAssetIssuer: assetIssuer,
+      destAssetCode,
+      destAssetIssuer,
+      path,
+      memo,
+    });
+  }
+
   const server = getHorizonServer();
-
   const sourceAccount = await server.loadAccount(sourcePublicKey);
-
   const now = Math.floor(Date.now() / 1000);
 
-  const paymentAsset =
-    assetCode === "XLM" || !assetIssuer
-      ? Asset.native()
-      : new Asset(assetCode, assetIssuer);
+  const paymentAsset = createAsset(assetCode, assetIssuer);
 
   let builder = new TransactionBuilder(sourceAccount, {
     fee: (await server.fetchBaseFee()).toString(),
@@ -247,6 +437,69 @@ export async function buildPaymentTx(params: {
       destination,
       asset: paymentAsset,
       amount,
+    })
+  );
+
+  if (memo) {
+    builder = builder.addMemo(Memo.text(memo));
+  }
+
+  const tx = builder.build();
+  return { xdr: tx.toXDR(), sourceAccount };
+}
+
+/**
+ * Build an unsigned PathPaymentStrictSend transaction for cross-asset transfers.
+ * The sender pays exactly `sendAmount` of sourceAsset, and the destination receives
+ * at least `destMin` of destAsset through the specified path.
+ */
+export async function buildPathPaymentStrictSendTx(params: {
+  sourcePublicKey: string;
+  destination: string;
+  sendAmount: string;
+  destMin: string;
+  sourceAssetCode?: string;
+  sourceAssetIssuer?: string;
+  destAssetCode: string;
+  destAssetIssuer?: string;
+  path?: Asset[];
+  memo?: string;
+}): Promise<BuildTxResult> {
+  const {
+    sourcePublicKey,
+    destination,
+    sendAmount,
+    destMin,
+    sourceAssetCode = "XLM",
+    sourceAssetIssuer,
+    destAssetCode,
+    destAssetIssuer,
+    path = [],
+    memo,
+  } = params;
+
+  const server = getHorizonServer();
+  const sourceAccount = await server.loadAccount(sourcePublicKey);
+  const now = Math.floor(Date.now() / 1000);
+
+  const sendAsset = createAsset(sourceAssetCode, sourceAssetIssuer);
+  const destAsset = createAsset(destAssetCode, destAssetIssuer);
+
+  let builder = new TransactionBuilder(sourceAccount, {
+    fee: (await server.fetchBaseFee()).toString(),
+    networkPassphrase: NETWORK_PASSPHRASE,
+    timebounds: {
+      minTime: 0,
+      maxTime: now + 300, // 5 minutes from now
+    },
+  }).addOperation(
+    Operation.pathPaymentStrictSend({
+      sendAsset,
+      sendAmount,
+      destination,
+      destAsset,
+      destMin,
+      path,
     })
   );
 

@@ -106,6 +106,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Cross-contract communication** | ✅ | ❌ |
 | **Multi-wallet support** (6 wallets: Freighter, xBull, Rabet, Albedo, Lobstr, Ledger) | ✅ | ❌ |
 | **Multi-asset support** (USDC, custom tokens) | ✅ | ❌ |
+| **Path payments** (cross-asset sends, rate preview, slippage protection) | ✅ | ❌ |
 | **PWA with offline support** | ✅ | ❌ |
 | **Classified error handling** (3 types, 300 contract variants) | ✅ | ❌ |
 | **Production error boundaries** | ✅ | ❌ |
