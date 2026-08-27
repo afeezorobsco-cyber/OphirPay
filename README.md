@@ -585,6 +585,7 @@ npm run test:visual:update
 A committed change that alters a baseline beyond the configured pixel
 threshold (`maxDiffPixelRatio: 0.001` in `tests/visual/visual-regression.spec.ts`)
 fails the run and emits a diff artifact under `playwright-visual-report/`.
+(Note: the `maxDiffPixelRatio` option is set in the visual regression spec.)
 
 **Updating baselines intentionally:** after a deliberate UI change, run
 `npm run test:visual:update`, review the regenerated screenshots in
