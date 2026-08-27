@@ -1580,6 +1580,7 @@ impl OphirPayContract {
         deposit_asset: Address,
         deposit_amount: i128,
     ) -> Result<u64, PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         proposer.require_auth();
         require_not_paused(&env)?;
 
@@ -1602,7 +1603,6 @@ impl OphirPayContract {
         // Reentrancy-guarded (MEDIUM-4) — a malicious deposit asset could
         // otherwise call back into the contract mid-transfer.
         if deposit_amount > 0 {
-            let _guard = acquire_reentrancy_lock(&env)?;
             let token_client = token::Client::new(&env, &deposit_asset);
             let contract_addr = env.current_contract_address();
             token_client.transfer(&proposer, &contract_addr, &deposit_amount);
@@ -1724,6 +1724,7 @@ impl OphirPayContract {
     /// Refunds the deposit to the proposer regardless of outcome — deposit
     /// exists to prevent spam, not to punish defeated proposals.
     pub fn execute_proposal(env: Env, proposal_id: u64) -> Result<bool, PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         let mut proposal: Proposal = env
             .storage()
             .persistent()
@@ -1752,7 +1753,6 @@ impl OphirPayContract {
         // The deposit serves as spam-protection, not punishment.
         // Reentrancy-guarded (MEDIUM-4).
         if proposal.deposit_amount > 0 {
-            let _guard = acquire_reentrancy_lock(&env)?;
             let token_client = token::Client::new(&env, &proposal.deposit_asset);
             let contract_addr = env.current_contract_address();
             token_client.transfer(&contract_addr, &proposal.proposer, &proposal.deposit_amount);

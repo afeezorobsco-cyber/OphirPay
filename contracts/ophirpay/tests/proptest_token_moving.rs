@@ -48,7 +48,9 @@ impl<'a> PropHarness<'a> {
         let owner = Address::generate(&env);
         let token_admin = Address::generate(&env);
 
-        let token_id = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+        let token_id = env
+            .register_stellar_asset_contract_v2(token_admin.clone())
+            .address();
         let token_client = token::Client::new(&env, &token_id);
         let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
 
@@ -587,7 +589,8 @@ fn test_reentrancy_lock_active_state_blocks_all_token_paths() {
 
     // 11. emergency_withdraw fails with ReentrantCall
     assert_eq!(
-        h.client.try_emergency_withdraw(&h.owner, &h.token_id, &1000i128),
+        h.client
+            .try_emergency_withdraw(&h.owner, &h.token_id, &1000i128),
         Err(Ok(PaymentError::ReentrantCall))
     );
 
