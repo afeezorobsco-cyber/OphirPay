@@ -10,6 +10,12 @@ Thank you for your interest in contributing! OphirPay is an open-source payment 
 4. Set up the database: `npx prisma db push && npx prisma generate`
 5. Start the dev server: `npm run dev`
 
+> 💡 **New to Stellar or Soroban?** Check out the
+> [Stellar & Soroban glossary](GLOSSARY.md) — it defines the terms used
+> throughout the codebase (XLM, testnet, friendbot, Horizon, Soroban, SAC,
+> WASM, Freighter, memo, trustline, path payments, sponsored reserves, and
+> more).
+
 ## Development Workflow
 
 - **Branch naming**: `feat/feature-name`, `fix/bug-description`, `docs/what-changed`, `ci/what-changed`, `test/what-changed`

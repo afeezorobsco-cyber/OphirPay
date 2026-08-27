@@ -80,6 +80,7 @@
 - [📊 Database Schema](docs/SCHEMA.md)
 - [🚀 Deployment Guide](docs/DEPLOYMENT.md)
 - [🤝 Contributing](#-contributing)
+- [📖 Stellar Glossary](GLOSSARY.md)
 - [🗺 Roadmap](#-roadmap)
 - [🔬 Formal Verification](#-formal-verification)
 - [🛡️ Security Audit](#️-security-audit)
@@ -695,6 +696,10 @@ Every push to `main` triggers **22 jobs** across six tracks:
 ## 🤝 Contributing
 
 We welcome contributions! Here's how to get started:
+
+> 💡 **New to Stellar/Soroban?** Read the [Stellar & Soroban glossary](GLOSSARY.md)
+> first — it explains the XLM, testnet, Horizon, Soroban, and other terms you'll
+> encounter throughout the codebase.
 
 1. **Fork** the repository
 2. **Create** a feature branch: `git checkout -b feat/amazing-feature`
