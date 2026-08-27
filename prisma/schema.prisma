@@ -12,14 +12,18 @@
 // set DIRECT_DATABASE_URL for migrations.
 //
 // ── SQLite ⇄ PostgreSQL notes ──────────────────────────────
-// This schema targets PostgreSQL in production. The dev SQLite datasource is
-// commented out below; the behavioral differences that matter here:
+// The committed schema is the canonical PostgreSQL definition (native
+// datasource + `@db.Decimal(18, 7)` annotations). For local SQLite dev you
+// must make two LOCAL, UNCOMMITTED edits — do not commit them, so migrations
+// and CI validate a single canonical schema:
 //
-//   • Decimal precision — `@db.Decimal(18, 7)` is a PostgreSQL-native
-//     annotation (DECIMAL(18,7)). SQLite has no fixed-precision numeric
-//     type: Prisma stores Decimal as its own arbitrary-precision text
-//     representation, so drop the `@db.Decimal(...)` annotation when running
-//     against SQLite.
+//   1. Swap the datasource: uncomment the sqlite block below and comment out
+//      the postgresql block.
+//   2. Drop all four `@db.Decimal(18, 7)` annotations — SQLite has no
+//      fixed-precision numeric type, so Prisma stores Decimal as its own
+//      arbitrary-precision text representation.
+//
+// Behavioral differences that matter when running against SQLite:
 //
 //   • Enums — PostgreSQL uses native ENUM types; SQLite emulates them as
 //     TEXT columns with client-side validation. Enum *values* are identical
@@ -27,11 +31,12 @@
 //
 //   • `relationMode = "prisma"` — required by SQLite (it has no foreign-key
 //     enforcement); PostgreSQL supports both modes. Keep it set so the same
-//     schema file works for both providers.
+//     data model works on both providers.
 //
 //   • Unique indexes on nullable columns — both providers treat NULLs as
-//     distinct, so `@@unique([userId, idempotencyKey])` allows any number of
-//     rows with a NULL key while still enforcing one row per non-NULL key.
+//     distinct, so a compound unique index that includes a nullable field
+//     allows any number of rows with NULL while still enforcing uniqueness
+//     for non-NULL values.
 
 generator client {
   provider = "prisma-client-js"
@@ -137,9 +142,10 @@ model Payment {
   userId            String
 
   // Payment details
-  /// Payment amount in the asset's smallest unit (stroops for XLM).
-  /// PostgreSQL: DECIMAL(18,7) — up to 18 digits, 7 after the decimal point.
-  /// SQLite: stored as arbitrary-precision text (drop the @db annotation).
+  /// Payment amount in ASSET UNITS (e.g. 10.5 = 10.5 XLM), NOT stroops —
+  /// Decimal(18,7) holds up to 18 digits with 7 fractional asset-unit
+  /// digits. Contract call paths convert asset units → stroops (×10^7)
+  /// via XLM_STROOPS; Horizon builders pass this decimal value directly.
   amount            Decimal   @db.Decimal(18, 7)
   /// Asset code sent (defaults to XLM, the Stellar native asset).
   assetCode         String    @default("XLM")
@@ -302,8 +308,9 @@ model Recurrence {
   name        String
   /// How often the schedule fires (see Frequency enum).
   frequency   Frequency
-  /// Amount per run in the asset's smallest unit (stroops for XLM).
-  /// PostgreSQL: DECIMAL(18,7). SQLite: arbitrary-precision text.
+  /// Amount per run in ASSET UNITS (e.g. 10.5 = 10.5 XLM), NOT stroops —
+  /// Decimal(18,7) holds up to 18 digits with 7 fractional asset-unit
+  /// digits. Contract call paths convert asset units → stroops (×10^7).
   amount      Decimal       @db.Decimal(18, 7)
   /// Asset code to send (defaults to XLM).
   assetCode   String        @default("XLM")
@@ -361,8 +368,9 @@ model PaymentRequest {
   id            String   @id @default(cuid())
   /// Owning user (see User).
   userId        String
-  /// Requested amount in the asset's smallest unit (stroops for XLM).
-  /// PostgreSQL: DECIMAL(18,7). SQLite: arbitrary-precision text.
+  /// Requested amount in ASSET UNITS (e.g. 10.5 = 10.5 XLM), NOT stroops —
+  /// Decimal(18,7) holds up to 18 digits with 7 fractional asset-unit
+  /// digits. Contract call paths convert asset units → stroops (×10^7).
   amount        Decimal  @db.Decimal(18, 7)
   /// Asset code requested (defaults to XLM).
   assetCode     String   @default("XLM")
@@ -443,8 +451,9 @@ model Refund {
   userId      String
   /// Payment being refunded (see Payment).
   paymentId   String
-  /// Refund amount in the asset's smallest unit.
-  /// PostgreSQL: DECIMAL(18,7). SQLite: arbitrary-precision text.
+  /// Refund amount in ASSET UNITS (e.g. 10.5 = 10.5 XLM), NOT stroops —
+  /// Decimal(18,7) holds up to 18 digits with 7 fractional asset-unit
+  /// digits. Contract call paths convert asset units → stroops (×10^7).
   amount      Decimal      @db.Decimal(18, 7)
   /// Asset being refunded (defaults to "native" = XLM).
   asset       String       @default("native")
