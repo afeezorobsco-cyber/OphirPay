@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { deliverWebhook } from "@/lib/webhook-deliver";
 import { logger } from "@/lib/logger";
 import type { WebhookEventType } from "@/app/api/webhooks/event-types";
+import { isSubscribedToEvent } from "./webhook-filter";
 
 /**
  * Fire-and-forget webhook dispatch for a given event type.
@@ -29,14 +30,16 @@ export async function dispatchWebhookEvent(
   if (typeof window !== "undefined") return;
 
   try {
-    const webhooks = await prisma.webhook.findMany({
+    const activeWebhooks = await prisma.webhook.findMany({
       where: {
         isActive: true,
-        events: { contains: event },
         ...(scopedUserId ? { userId: scopedUserId } : {}),
       },
     });
-
+    const webhooks = activeWebhooks.filter(
+      (wh: Awaited<ReturnType<typeof prisma.webhook.findMany>>[number]) =>
+        isSubscribedToEvent(wh.events, event),
+    );
     if (webhooks.length === 0) return;
 
     const payload = {
@@ -49,7 +52,10 @@ export async function dispatchWebhookEvent(
 
     // Fire all webhook deliveries in parallel (non-blocking)
     const results = await Promise.allSettled(
-      webhooks.map((wh) => deliverWebhook(wh.url, wh.secret, payload)),
+      webhooks.map(
+        (wh: Awaited<ReturnType<typeof prisma.webhook.findMany>>[number]) =>
+          deliverWebhook(wh.url, wh.secret, payload),
+      ),
     );
 
     const succeeded = results.filter((r) => r.status === "fulfilled" && r.value).length;

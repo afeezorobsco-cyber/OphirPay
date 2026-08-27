@@ -186,7 +186,7 @@ export const createRecurringSchema = z.object({
 
 export const createWebhookSchema = z.object({
   url: z.string().url("Invalid webhook URL"),
-  events: z.array(z.string()).min(1, "At least one event is required"),
+  events: z.array(z.string()).default([]),
   isActive: z.boolean().default(true),
 });
 
