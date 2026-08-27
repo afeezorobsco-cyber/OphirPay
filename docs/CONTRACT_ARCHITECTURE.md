@@ -160,9 +160,11 @@ leaving the Emitter running while OphirPay was paused — a half-open circuit
 breaker. Propagating the result (`map_err(...)?`) turns any sub-call failure
 into a full revert, restoring the invariant:
 
-> **Invariant:** after `emergency_pause_all` returns `Ok`, both contracts are
-> paused. After `emergency_unpause_all` returns `Ok`, both are unpaused. If
-> either returns `Err`, the transaction reverts and *nothing* changed.
+> **Invariant:** when an Emitter is linked, after `emergency_pause_all`
+> returns `Ok`, both contracts are paused, and after `emergency_unpause_all`
+> returns `Ok`, both are unpaused. Without a linked Emitter, only OphirPay
+> changes state. If either function returns `Err`, the transaction reverts
+> and *nothing* changed.
 
 ## 4. Sequence diagram
 
