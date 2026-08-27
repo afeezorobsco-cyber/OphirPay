@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   API_SCOPES,
   type ApiScope,
-} from "@/lib/api-auth";
+} from "@/lib/api-scopes";
 import { useToast } from "@/components/ui/Toast";
 import { CopyButton } from "@/components/ui/CopyButton";
 
