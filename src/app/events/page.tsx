@@ -3,6 +3,8 @@
 
 
 import { useState, useEffect, useRef } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { shortenAddress, timeAgo } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
 
@@ -18,6 +20,7 @@ import { XLM_STROOPS, getStellarExplorerUrl } from "@/lib/stellar";
 type SseEvent = LiveEvent;
 
 export default function EventsPage() {
+  usePageTitle(PAGE_TITLES.EVENTS);
   const [connected, setConnected] = useState(false);
   const [transport, setTransport] = useState<LiveTransport | null>(null);
   const [liveEvents, setLiveEvents] = useState<SseEvent[]>([]);

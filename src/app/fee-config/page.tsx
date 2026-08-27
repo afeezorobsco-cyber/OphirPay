@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
@@ -23,6 +25,7 @@ interface FeeConfigData {
 }
 
 export default function FeeConfigPage() {
+  usePageTitle(PAGE_TITLES.FEE_CONFIG);
   const toast = useToast();
   const { wallet } = useWallet();
   const queryClient = useQueryClient();

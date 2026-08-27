@@ -4,6 +4,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { useRouter } from "next/navigation";
 import { timeAgo, getStatusColor } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -26,6 +28,7 @@ interface BatchListResult {
 const PAGE_LIMIT = 50;
 
 export default function BatchesPage() {
+  usePageTitle(PAGE_TITLES.BATCHES);
   const router = useRouter();
   // Keyset pagination: `cursor` is the boundary of the current page;
   // `cursorStack` remembers prior page boundaries so Previous works.

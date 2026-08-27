@@ -3,6 +3,8 @@
 
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { EmptyState } from "@/components/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -57,6 +59,7 @@ const ACTION_COLORS: Record<string, "success" | "danger" | "warning" | "info"> =
 };
 
 export default function AuditLogPage() {
+  usePageTitle(PAGE_TITLES.AUDIT_LOG);
   const [filter, setFilter] = useState("");
   const [connected, setConnected] = useState(false);
   const [liveMode, setLiveMode] = useState(false);

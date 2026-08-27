@@ -4,6 +4,8 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
 import {
@@ -64,6 +66,7 @@ export default function SendPage() {
 }
 
 function SendPageClient() {
+  usePageTitle(PAGE_TITLES.SEND);
   const { wallet, fetchBalance } = useWallet();
   const toast = useToast();
   const searchParams = useSearchParams();

@@ -3,6 +3,8 @@
 
 
 import { useState } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -29,6 +31,7 @@ interface CreateWebhookBody {
 }
 
 export default function WebhooksPage() {
+  usePageTitle(PAGE_TITLES.WEBHOOKS);
   const toast = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [newSecret, setNewSecret] = useState<string | null>(null);

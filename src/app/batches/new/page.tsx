@@ -3,6 +3,8 @@
 
 
 import { useState, useRef, useCallback } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
 import {
@@ -50,6 +52,7 @@ interface TxResult {
 let nextId = 0;
 
 export default function NewBatchPage() {
+  usePageTitle(PAGE_TITLES.NEW_BATCH);
   const { wallet } = useWallet();
 
   const [recipients, setRecipients] = useState<RecipientRow[]>([

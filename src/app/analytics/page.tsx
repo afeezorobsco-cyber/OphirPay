@@ -3,6 +3,8 @@
 
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { useWallet } from "@/hooks/useMultiWallet";
 import {
   fetchOnChainPayments,
@@ -15,6 +17,7 @@ import { Card } from "@/components/ui/Card";
 import { Breadcrumb } from "@/components/Breadcrumb";
 
 export default function AnalyticsPage() {
+  usePageTitle(PAGE_TITLES.ANALYTICS);
   const { wallet } = useWallet();
   const [payments, setPayments] = useState<OnChainPayment[]>([]);
   const [loading, setLoading] = useState(true);

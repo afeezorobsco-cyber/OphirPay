@@ -3,6 +3,8 @@
 
 
 import { useState } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
 import {
@@ -38,6 +40,7 @@ const FUNCTIONS = [
 // ── Page ──────────────────────────────────────────────────────
 
 export default function ContractsPage() {
+  usePageTitle(PAGE_TITLES.CONTRACTS);
   const { wallet } = useWallet();
 
   const [contractId] = useState(DEFAULT_CONTRACT_ID);

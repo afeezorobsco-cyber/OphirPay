@@ -3,6 +3,8 @@
 
 
 import { Suspense, useMemo, useState } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { formatAmount, shortenAddress, timeAgo } from "@/lib/utils";
@@ -31,6 +33,7 @@ const ALLOWED_PAGE_SIZES = [10, 25, 50] as const;
 const DEFAULT_PAGE_SIZE = 25;
 
 export default function PaymentsPage() {
+  usePageTitle(PAGE_TITLES.PAYMENTS);
   // `useSearchParams` requires a Suspense boundary during static prerendering.
   return (
     <Suspense fallback={<PaymentsFallback />}>
