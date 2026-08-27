@@ -14,9 +14,13 @@ const guidePath = path.join(root, "docs", "CHANGELOG_GUIDE.md");
 const contributingPath = path.join(root, "CONTRIBUTING.md");
 
 /**
- * Extract the text of a `### <heading>` section from a markdown document,
- * ignoring headings inside fenced code blocks. Returns the section body
- * (without the heading line) or "" if missing.
+ * Extract the text of a `### <heading>` section from a markdown document.
+ *
+ * Only the ``` fence delimiters are skipped; the *content inside* fenced code
+ * blocks is intentionally kept in the body, because the category examples in
+ * CHANGELOG_GUIDE.md live inside ```markdown fences and the tests below
+ * assert on them. Headings inside fences do not terminate the section.
+ * Returns the section body (without the heading line) or "" if missing.
  */
 function sectionAfter(markdown: string, heading: string): string {
   const lines = markdown.split("\n");

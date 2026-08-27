@@ -139,7 +139,7 @@ used when a feature is marked for removal but still works.
 > [`SECURITY.md`](../SECURITY.md) when the issue is not yet public.
 
 ```markdown
-### Security Fixes
+### Security
 - **Voting weight**: `vote_on_proposal` no longer accepts self-reported
   `weight` parameter. Each address gets exactly 1 vote per proposal with
   double-vote prevention via persistent storage tracking
@@ -149,6 +149,10 @@ used when a feature is marked for removal but still works.
 - **Min proposal deposit**: `create_proposal` now requires `deposit_asset` +
   `deposit_amount` params, validated against `config.min_proposal_deposit`
 ```
+
+> Use the canonical heading `### Security` for new entries. Early changelog
+> entries (2026-08-11 and earlier) used `### Security Fixes`; new entries
+> should not perpetuate that spelling.
 
 ### Deprecated — soon-to-be-removed features
 
@@ -221,18 +225,25 @@ Releases are cut by maintainers from `main`. The flow is:
 
 Pick the next version with Semantic Versioning:
 
-| Change type | Version bump | Example |
+| Change type | Version bump (1.0.0+) | Version bump (pre-1.0) |
 |---|---|---|
-| Breaking change (contract interface, API, config) | **MAJOR** (`X.0.0`) | `0.1.0` → `1.0.0` |
-| Backward-compatible feature / behavior expansion | **MINOR** (`0.X.0`) | `0.1.0` → `0.2.0` |
-| Bug fix / documentation-only user-facing update | **PATCH** (`0.0.X`) | `0.1.0` → `0.1.1` |
+| Breaking change (contract interface, API, config) | **MAJOR** (`X.0.0`) | **MINOR** (`0.X.0`), called out explicitly |
+| Backward-compatible feature / behavior expansion | **MINOR** (`0.X.0`) | **MINOR** (`0.X.0`) |
+| Bug fix / documentation-only user-facing update | **PATCH** (`0.0.X`) | **PATCH** (`0.0.X`) |
 
 Rules observed in this repo:
 
-- Contract breaking changes (renamed/removed public functions, changed
-  signatures, new required args) are always a MAJOR bump.
-- Pre-1.0, `MINOR` bumps may carry breaking changes — call them out in the
-  changelog entry and the release notes.
+- **After 1.0.0**, a breaking change (renamed/removed public contract
+  functions, changed signatures, new required args, changed API or config
+  semantics) is always a MAJOR bump. The `1.0.0` release marks where the
+  public API stabilizes.
+- **Before 1.0.0** (the current `0.x` line), the semver convention for
+  pre-1.0 software applies: breaking changes may ship in `MINOR` bumps
+  (`0.1.0` → `0.2.0`) while the API is still stabilizing. This is not a
+  contradiction — it is standard semver practice. Each breaking change must
+  still be called out explicitly in the changelog entry and the release
+  notes so integrators can adapt, and the `1.0.0` release should collect
+  the remaining breaking changes before the strict MAJOR rule applies.
 - The version lives in `package.json` (`"version"`), the changelog heading,
   and the git tag. Keep all three in sync in the release commit.
 
