@@ -7,7 +7,7 @@ use ophirpay_contract::{
 };
 use ophirpay_emitter::{EmitterError, PaymentEventEmitter, PaymentEventEmitterClient};
 use soroban_sdk::testutils::{Address as _, Ledger as _};
-use soroban_sdk::{token, Address, Env, IntoVal, String, Vec};
+use soroban_sdk::{token, Address, Env, String, Vec};
 
 // ── Test Fixture ─────────────────────────────────────────────────────────────
 
