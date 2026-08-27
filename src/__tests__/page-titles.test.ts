@@ -96,12 +96,15 @@ describe("usePageTitle", () => {
     expect(document.title).toBe("Payments | OphirPay");
   });
 
-  it("restores the previous title when the route unmounts (e.g. error boundary)", () => {
-    document.title = "OphirPay — Stellar Payment Orchestration";
-    const { unmount } = renderHook(() => usePageTitle(PAGE_TITLES.PAYMENTS));
-    expect(document.title).toBe("Payments | OphirPay");
-    // Unmounting simulates an error.tsx / global-error.tsx takeover — the
-    // route must not leave a stale title behind.
+  it("restores the neutral default title when the route unmounts (e.g. error boundary)", () => {
+    // Simulate arriving from another route — the previous title is a stale
+    // route title, not the default.
+    document.title = "Payments | OphirPay";
+    const { unmount } = renderHook(() => usePageTitle(PAGE_TITLES.BATCHES));
+    expect(document.title).toBe("Batch Payments | OphirPay");
+    // Unmounting simulates an error.tsx / global-error.tsx takeover. Neither
+    // error boundary supplies a title, so the hook must fall back to the
+    // neutral default — never the preceding route's title.
     unmount();
     expect(document.title).toBe("OphirPay — Stellar Payment Orchestration");
   });

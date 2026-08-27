@@ -12,6 +12,13 @@ import { useEffect } from "react";
  */
 const TITLE_SUFFIX = " | OphirPay";
 
+/**
+ * The root layout's default title (`title.default` in `src/app/layout.tsx`).
+ * Restored when a route unmounts so error boundaries never display a stale
+ * route title.
+ */
+const DEFAULT_TITLE = "OphirPay — Stellar Payment Orchestration";
+
 /** Format a page title like the layout's `"%s | OphirPay"` template. */
 function formatTitle(title: string): string {
   return title.includes("OphirPay") ? title : `${title}${TITLE_SUFFIX}`;
@@ -24,21 +31,20 @@ function formatTitle(title: string): string {
  *
  * When the calling route unmounts — for example when an `error.tsx` or
  * `global-error.tsx` boundary takes over during client navigation — the
- * previous document title is restored so the error screen never retains the
- * preceding route's title.
+ * title is reset to the neutral default above, so the error screen never
+ * retains the preceding route's title (or the failed route's own title).
  *
  * Passing `null`/`undefined` leaves the title untouched.
  */
 export function usePageTitle(title: string | null | undefined): void {
   useEffect(() => {
     if (!title) return;
-    const previous = document.title;
     const next = formatTitle(title);
     if (document.title !== next) {
       document.title = next;
     }
     return () => {
-      document.title = previous;
+      document.title = DEFAULT_TITLE;
     };
   }, [title]);
 }
