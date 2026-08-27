@@ -2177,7 +2177,7 @@ impl OphirPayContract {
         // instead of silently leaving the emitter running.
         if let Some(emitter) = env.storage().instance().get(&EMITTER_ADDR) {
             let pause_fn = Symbol::new(&env, "pause");
-            let args = soroban_sdk::vec![&env, caller.to_val()];
+            let args = soroban_sdk::vec![&env, caller.into_val(&env)];
             let _: () = env.invoke_contract(&emitter, &pause_fn, args);
             release_reentrancy_lock(&env);
         } else {
@@ -2209,7 +2209,7 @@ impl OphirPayContract {
         // (MEDIUM-5 audit fix) so a failure reverts the atomic unpause.
         if let Some(emitter) = env.storage().instance().get(&EMITTER_ADDR) {
             let unpause_fn = Symbol::new(&env, "unpause");
-            let args = soroban_sdk::vec![&env, caller.to_val()];
+            let args = soroban_sdk::vec![&env, caller.into_val(&env)];
             let _: () = env.invoke_contract(&emitter, &unpause_fn, args);
             release_reentrancy_lock(&env);
         } else {
