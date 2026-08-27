@@ -16,6 +16,7 @@ export const ROUTES = {
   MULTISIG: "/multisig",
   GOVERNANCE: "/governance",
   RBAC: "/rbac",
+  KEYS: "/keys",
   FEE_CONFIG: "/fee-config",
   TIMELOCK: "/timelock",
   POLICY_VERSIONS: "/policy-versions",

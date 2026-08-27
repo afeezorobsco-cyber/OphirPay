@@ -90,4 +90,4 @@ async function _GET(request: Request) {
   }
 }
 
-export const GET = withRequestLogging(withApiAuth(_GET));
+export const GET = withRequestLogging(withApiAuth(_GET, "admin"));

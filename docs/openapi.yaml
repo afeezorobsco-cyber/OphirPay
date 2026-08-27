@@ -656,7 +656,7 @@ paths:
       security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
       responses:
         "200":
-          description: API key list (id, name, prefix, timestamps only)
+          description: API key list (id, name, prefix, scopes, timestamps)
         "401":
           $ref: "#/components/responses/Unauthorized"
     post:
@@ -669,14 +669,24 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name, userId]
+              required: [name]
               properties:
                 name:
                   type: string
                   description: Label for this key
-                userId:
-                  type: string
-                  description: Owning user ID
+                scopes:
+                  type: array
+                  description: >
+                    Permitted scopes for the key. Allowed values:
+                    read:payments, write:payments, read:analytics, admin.
+                    The admin scope grants all scopes. Empty means no access.
+                  items:
+                    type: string
+                    enum:
+                      - read:payments
+                      - write:payments
+                      - read:analytics
+                      - admin
       responses:
         "201":
           description: Key generated — store the raw key immediately
@@ -692,11 +702,43 @@ paths:
                       id: { type: string }
                       name: { type: string }
                       prefix: { type: string }
+                      scopes:
+                        type: array
+                        items: { type: string }
                       key:
                         type: string
                         description: Raw API key — shown only once
         "400":
           $ref: "#/components/responses/ValidationError"
+    patch:
+      tags: [API Keys]
+      summary: Update the scopes of an existing API key
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, scopes]
+              properties:
+                id:
+                  type: string
+                  description: API key ID to update
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - read:payments
+                      - write:payments
+                      - read:analytics
+                      - admin
+      responses:
+        "200":
+          description: Scopes updated
+        "400":
+          description: Missing key ID or invalid scope
     delete:
       tags: [API Keys]
       summary: Revoke an API key

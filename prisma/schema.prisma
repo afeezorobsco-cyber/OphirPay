@@ -558,6 +558,7 @@ model ApiKey {
   keyHash   String   @unique
   /// First 8 characters of the raw key, for display / identification only.
   prefix    String   // First 8 chars for display
+  scopes    String[] @default([]) // e.g. ["read:payments","write:payments","admin"]
   /// Last time the key was used to authenticate a request.
   lastUsed  DateTime?
   /// When the key was created.

@@ -2,8 +2,41 @@
 
 import crypto from "crypto";
 import prisma from "@/lib/prisma";
-import { unauthorizedError } from "@/lib/api-response";
+import { unauthorizedError, forbiddenError } from "@/lib/api-response";
 import { NextResponse } from "next/server";
+
+// ── Scopes ─────────────────────────────────────────────────────
+
+/**
+ * API key scopes. Each key carries a set of these; routes declare the scope(s)
+ * they require and requests are denied (403) when the key lacks them.
+ * The `admin` scope implicitly grants every other scope.
+ */
+export const API_SCOPES = [
+  "read:payments",
+  "write:payments",
+  "read:analytics",
+  "admin",
+] as const;
+
+export type ApiScope = (typeof API_SCOPES)[number];
+
+export const ADMIN_SCOPE: ApiScope = "admin";
+
+/**
+ * Whether a key's scopes satisfy a set of required scopes.
+ * The `admin` scope satisfies any requirement. Empty `required` is always
+ * satisfied. Every entry in `required` must be present (AND semantics).
+ */
+export function hasScope(
+  keyScopes: string[] | null | undefined,
+  required: ApiScope[]
+): boolean {
+  if (!required.length) return true;
+  const scopes = new Set(keyScopes ?? []);
+  if (scopes.has(ADMIN_SCOPE)) return true;
+  return required.every((s) => scopes.has(s));
+}
 
 /**
  * Consolidated API authentication module — single source of truth.
@@ -57,6 +90,7 @@ export interface AuthResult {
   userId: string;
   keyId: string;
   keyName: string;
+  scopes: string[];
 }
 
 /**
@@ -77,7 +111,13 @@ export async function authenticateRequest(
   try {
     const apiKey = await prisma.apiKey.findFirst({
       where: { keyHash, prefix },
-      select: { id: true, userId: true, name: true, expiresAt: true },
+      select: {
+        id: true,
+        userId: true,
+        name: true,
+        expiresAt: true,
+        scopes: true,
+      },
     });
 
     if (!apiKey) return null;
@@ -94,6 +134,7 @@ export async function authenticateRequest(
       userId: apiKey.userId,
       keyId: apiKey.id,
       keyName: apiKey.name,
+      scopes: apiKey.scopes ?? [],
     };
   } catch {
     // DB unavailable — reject rather than fail open
@@ -110,9 +151,17 @@ export async function authenticateRequest(
  *   export const GET = withApiAuth(async (req) => { … });
  */
 export function withApiAuth(
-  handler: (request: Request, ...args: unknown[]) => Promise<Response>
+  handler: (request: Request, ...args: unknown[]) => Promise<Response>,
+  required?: ApiScope | ApiScope[]
 ) {
   return async (request: Request, ...args: unknown[]): Promise<Response> => {
+    // Scope-enforced variant
+    if (required) {
+      const auth = await requireScopes(request, required);
+      if (!("userId" in auth)) return auth; // auth is a 401/403 Response
+      return handler(request, ...args);
+    }
+
     const auth = await authenticateRequest(request);
     if (!auth) {
       return unauthorizedError(
@@ -121,6 +170,39 @@ export function withApiAuth(
     }
     return handler(request, ...args);
   };
+}
+
+/**
+ * Authenticate *and* verify the request's API key carries the required scope(s).
+ *
+ * Returns the `AuthResult` on success, or a 401/403 `NextResponse` on failure.
+ * Check the result with `if (!("userId" in auth)) return auth;` before using it.
+ *
+ *   const auth = await requireScopes(request, "read:payments");
+ *   if (!("userId" in auth)) return auth;   // 401/403 Response
+ *   // auth.userId / auth.scopes available
+ */
+export async function requireScopes(
+  request: Request,
+  required: ApiScope | ApiScope[]
+): Promise<AuthResult | NextResponse> {
+  const auth = await authenticateRequest(request);
+  if (!auth) {
+    return unauthorizedError(
+      "Valid API key required. Use Authorization: Bearer <key> or X-API-Key header."
+    );
+  }
+
+  const requiredList = Array.isArray(required) ? required : [required];
+  if (!hasScope(auth.scopes, requiredList)) {
+    return forbiddenError(
+      `This API key lacks the required scope(s): ${requiredList.join(", ")}. ` +
+        `Its effective scopes are: ${auth.scopes.length ? auth.scopes.join(", ") : "(none)"}`,
+      { required: requiredList, has: auth.scopes }
+    );
+  }
+
+  return auth;
 }
 
 /**

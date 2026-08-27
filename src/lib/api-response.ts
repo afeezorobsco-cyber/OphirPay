@@ -131,6 +131,13 @@ export function unauthorizedError(message = "Unauthorized") {
   return errorResponse(ERROR_CODES.UNAUTHORIZED, message, 401);
 }
 
+export function forbiddenError(
+  message = "Forbidden",
+  details?: unknown
+) {
+  return errorResponse(ERROR_CODES.INSUFFICIENT_SCOPE, message, 403, details);
+}
+
 export function rateLimitError(message = "Too many requests") {
   return errorResponse(ERROR_CODES.RATE_LIMITED, message, 429);
 }
