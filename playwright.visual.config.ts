@@ -21,10 +21,10 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
-    // Store baselines next to the spec.
-    snapshotPathTemplate:
-      "{testDir}/__screenshots__/{testFilePath}/{arg}{ext}",
   },
+  // Store baselines next to the spec.
+  snapshotPathTemplate:
+    "{testDir}/__screenshots__/{testFilePath}/{arg}{ext}",
   projects: [
     {
       name: "visual-chromium",
