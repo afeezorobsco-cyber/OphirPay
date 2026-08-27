@@ -862,7 +862,22 @@ fn require_not_paused(env: &Env) -> Result<(), PaymentError> {
 /// Reentrancy guard: set lock before cross-contract calls.
 /// Soroban contracts are single-threaded per invocation, but reentrancy
 /// can occur when a cross-contract call loops back to this contract.
-fn acquire_reentrancy_lock(env: &Env) -> Result<(), PaymentError> {
+///
+/// The returned guard automatically releases the lock when dropped, so it is
+/// safe to `?`-return from the guarded function without leaking the lock.
+/// Because the check must reject reentrant calls even for otherwise-invalid
+/// inputs, this must be the FIRST operation in any token-moving function.
+struct ReentrancyGuard<'a> {
+    env: &'a Env,
+}
+
+impl<'a> Drop for ReentrancyGuard<'a> {
+    fn drop(&mut self) {
+        release_reentrancy_lock(self.env);
+    }
+}
+
+fn acquire_reentrancy_lock(env: &Env) -> Result<ReentrancyGuard, PaymentError> {
     let locked: bool = env
         .storage()
         .instance()
@@ -872,10 +887,12 @@ fn acquire_reentrancy_lock(env: &Env) -> Result<(), PaymentError> {
         return Err(PaymentError::ReentrantCall);
     }
     env.storage().instance().set(&REENTRANCY_LOCK, &true);
-    Ok(())
+    Ok(ReentrancyGuard { env })
 }
 
 /// Release the reentrancy lock after cross-contract calls complete.
+/// Prefer using the [`ReentrancyGuard`] returned by [`acquire_reentrancy_lock`],
+/// which releases automatically on drop. This is only used internally by the guard.
 fn release_reentrancy_lock(env: &Env) {
     env.storage().instance().set(&REENTRANCY_LOCK, &false);
 }
@@ -1585,13 +1602,12 @@ impl OphirPayContract {
         // Reentrancy-guarded (MEDIUM-4) — a malicious deposit asset could
         // otherwise call back into the contract mid-transfer.
         if deposit_amount > 0 {
-            acquire_reentrancy_lock(&env)?;
+            let _guard = acquire_reentrancy_lock(&env)?;
             let token_client = token::Client::new(&env, &deposit_asset);
             let contract_addr = env.current_contract_address();
             token_client.transfer(&proposer, &contract_addr, &deposit_amount);
             // Track deposit in LOCKED_BALANCE so emergency_withdraw can't drain it
             add_locked(&env, deposit_amount);
-            release_reentrancy_lock(&env);
         }
 
         let now = env.ledger().timestamp();
@@ -1736,13 +1752,12 @@ impl OphirPayContract {
         // The deposit serves as spam-protection, not punishment.
         // Reentrancy-guarded (MEDIUM-4).
         if proposal.deposit_amount > 0 {
-            acquire_reentrancy_lock(&env)?;
+            let _guard = acquire_reentrancy_lock(&env)?;
             let token_client = token::Client::new(&env, &proposal.deposit_asset);
             let contract_addr = env.current_contract_address();
             token_client.transfer(&contract_addr, &proposal.proposer, &proposal.deposit_amount);
             // Release deposit from LOCKED_BALANCE now that it's refunded
             add_locked(&env, -proposal.deposit_amount);
-            release_reentrancy_lock(&env);
         }
 
         env.events().publish(
@@ -2140,9 +2155,9 @@ impl OphirPayContract {
     /// in a single atomic transaction. If the Emitter is not linked, only
     /// OphirPay is paused. This mirrors FacilPay's cross-contract pause_all.
     pub fn emergency_pause_all(env: Env, caller: Address) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         caller.require_auth();
         require_owner(&env, &caller)?;
-        acquire_reentrancy_lock(&env)?;
 
         // Pause OphirPay
         env.storage().instance().set(&PAUSED, &true);
@@ -2157,10 +2172,7 @@ impl OphirPayContract {
             let args = soroban_sdk::vec![&env, caller.to_val()];
             let result: Result<(), soroban_sdk::Error> =
                 env.invoke_contract(&emitter, &pause_fn, args);
-            release_reentrancy_lock(&env);
             result.map_err(|_| PaymentError::CrossContractCallFailed)?;
-        } else {
-            release_reentrancy_lock(&env);
         }
 
         record_audit(
@@ -2176,9 +2188,9 @@ impl OphirPayContract {
     /// Emergency unpause: unpauses BOTH OphirPay AND the linked Emitter contract
     /// in a single atomic transaction.
     pub fn emergency_unpause_all(env: Env, caller: Address) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         caller.require_auth();
         require_owner(&env, &caller)?;
-        acquire_reentrancy_lock(&env)?;
 
         // Unpause OphirPay
         env.storage().instance().set(&PAUSED, &false);
@@ -2191,13 +2203,8 @@ impl OphirPayContract {
             let args = soroban_sdk::vec![&env, caller.to_val()];
             let result: Result<(), soroban_sdk::Error> =
                 env.invoke_contract(&emitter, &unpause_fn, args);
-            release_reentrancy_lock(&env);
             result.map_err(|_| PaymentError::CrossContractCallFailed)?;
-        } else {
-            release_reentrancy_lock(&env);
         }
-
-        release_reentrancy_lock(&env);
 
         record_audit(
             &env,
@@ -2221,7 +2228,10 @@ impl OphirPayContract {
 
     /// Check if the reentrancy lock is currently held.
     pub fn is_reentrancy_locked(env: Env) -> bool {
-        env.storage().instance().get(&REENTRANCY_LOCK).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&REENTRANCY_LOCK)
+            .unwrap_or(false)
     }
 
     /// Emergency withdraw: owner can rescue tokens accidentally sent directly
@@ -2238,6 +2248,7 @@ impl OphirPayContract {
         asset: Address,
         amount: i128,
     ) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         caller.require_auth();
         let owner: Address = env
             .storage()
@@ -2251,8 +2262,6 @@ impl OphirPayContract {
             return Err(PaymentError::NoTokensToWithdraw);
         }
 
-        acquire_reentrancy_lock(&env)?;
-
         // INVARIANT: cannot withdraw locked user funds
         let token_client = token::Client::new(&env, &asset);
         let contract_addr = env.current_contract_address();
@@ -2260,13 +2269,10 @@ impl OphirPayContract {
         let locked: i128 = env.storage().instance().get(&LOCKED_BALANCE).unwrap_or(0);
         let unlocked = contract_balance.saturating_sub(locked);
         if amount > unlocked {
-            release_reentrancy_lock(&env);
             return Err(PaymentError::NoTokensToWithdraw);
         }
 
         token_client.transfer(&contract_addr, &owner, &amount);
-
-        release_reentrancy_lock(&env);
 
         record_audit(
             &env,
@@ -2588,6 +2594,9 @@ impl OphirPayContract {
         deadline: u64,
         metadata: String,
     ) -> Result<u64, PaymentError> {
+        // Reentrancy guard MUST be the first check so a locked contract rejects
+        // every token-moving call (even with otherwise-invalid inputs).
+        let _guard = acquire_reentrancy_lock(&env)?;
         depositor.require_auth();
         require_not_paused(&env)?;
         if amount <= 0 {
@@ -2595,13 +2604,11 @@ impl OphirPayContract {
         }
 
         // Transfer tokens from depositor to this contract (reentrancy-guarded, MEDIUM-4)
-        acquire_reentrancy_lock(&env)?;
         let token_client = token::Client::new(&env, &asset);
         let contract_addr = env.current_contract_address();
         token_client.transfer(&depositor, &contract_addr, &amount);
 
         add_locked(&env, amount);
-        release_reentrancy_lock(&env);
 
         let mut count: u64 = env.storage().instance().get(&ESCROW_COUNT).unwrap_or(0);
         count += 1;
@@ -2647,6 +2654,7 @@ impl OphirPayContract {
 
     /// Owner releases escrow to the beneficiary (anytime).
     pub fn release_escrow(env: Env, owner: Address, escrow_id: u64) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         owner.require_auth();
         require_not_paused(&env)?;
         let stored_owner: Address = env
@@ -2669,7 +2677,6 @@ impl OphirPayContract {
         }
 
         // Transfer tokens to beneficiary (reentrancy-guarded, MEDIUM-4)
-        acquire_reentrancy_lock(&env)?;
         let token_client = token::Client::new(&env, &escrow.asset);
         let contract_addr = env.current_contract_address();
         add_locked(&env, -escrow.amount);
@@ -2684,8 +2691,6 @@ impl OphirPayContract {
         env.storage()
             .persistent()
             .extend_ttl(&(ESCROW_KEY, escrow_id), 5000, 50000);
-
-        release_reentrancy_lock(&env);
 
         inc_counter(&env, &STAT_ESC_RELEASED);
 
@@ -2708,6 +2713,7 @@ impl OphirPayContract {
         escrow_id: u64,
         release_to_beneficiary: bool,
     ) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         arbiter.require_auth();
         require_not_paused(&env)?;
 
@@ -2733,8 +2739,6 @@ impl OphirPayContract {
             escrow.depositor.clone()
         };
 
-        acquire_reentrancy_lock(&env)?;
-
         let token_client = token::Client::new(&env, &escrow.asset);
         let contract_addr = env.current_contract_address();
         add_locked(&env, -escrow.amount);
@@ -2749,8 +2753,6 @@ impl OphirPayContract {
         env.storage()
             .persistent()
             .extend_ttl(&(ESCROW_KEY, escrow_id), 5000, 50000);
-
-        release_reentrancy_lock(&env);
 
         inc_counter(&env, &STAT_ESC_RELEASED);
 
@@ -2771,6 +2773,7 @@ impl OphirPayContract {
         beneficiary: Address,
         escrow_id: u64,
     ) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         beneficiary.require_auth();
         require_not_paused(&env)?;
 
@@ -2791,7 +2794,6 @@ impl OphirPayContract {
         }
 
         // Transfer tokens to beneficiary (reentrancy-guarded, MEDIUM-4)
-        acquire_reentrancy_lock(&env)?;
         let token_client = token::Client::new(&env, &escrow.asset);
         let contract_addr = env.current_contract_address();
         add_locked(&env, -escrow.amount);
@@ -2805,8 +2807,6 @@ impl OphirPayContract {
         env.storage()
             .persistent()
             .extend_ttl(&(ESCROW_KEY, escrow_id), 5000, 50000);
-
-        release_reentrancy_lock(&env);
 
         inc_counter(&env, &STAT_ESC_CLAIMED);
 
@@ -2849,6 +2849,7 @@ impl OphirPayContract {
         end_time: u64,
         metadata: String,
     ) -> Result<u64, PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         creator.require_auth();
         require_not_paused(&env)?;
         if total_amount <= 0 {
@@ -2859,13 +2860,11 @@ impl OphirPayContract {
         }
 
         // Transfer total amount from creator to contract (reentrancy-guarded, MEDIUM-4)
-        acquire_reentrancy_lock(&env)?;
         let token_client = token::Client::new(&env, &asset);
         let contract_addr = env.current_contract_address();
         token_client.transfer(&creator, &contract_addr, &total_amount);
 
         add_locked(&env, total_amount);
-        release_reentrancy_lock(&env);
 
         let mut count: u64 = env.storage().instance().get(&STREAM_COUNT).unwrap_or(0);
         count += 1;
@@ -2920,6 +2919,7 @@ impl OphirPayContract {
         recipient: Address,
         stream_id: u64,
     ) -> Result<i128, PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         recipient.require_auth();
         require_not_paused(&env)?;
 
@@ -2950,7 +2950,6 @@ impl OphirPayContract {
         }
 
         // Transfer claimable amount to recipient (reentrancy-guarded, MEDIUM-4)
-        acquire_reentrancy_lock(&env)?;
         let token_client = token::Client::new(&env, &stream.asset);
         let contract_addr = env.current_contract_address();
         add_locked(&env, -claimable);
@@ -2965,8 +2964,6 @@ impl OphirPayContract {
             .persistent()
             .extend_ttl(&(STREAM_KEY, stream_id), 5000, 50000);
 
-        release_reentrancy_lock(&env);
-
         inc_counter(&env, &STAT_STR_CLAIMED);
 
         record_audit(
@@ -2980,8 +2977,9 @@ impl OphirPayContract {
         Ok(claimable)
     }
 
-    /// Creator cancels a stream. Unvested tokens are returned to creator.
+    /// Creator cancels a stream. All tokens not yet claimed are returned to creator.
     pub fn cancel_stream(env: Env, creator: Address, stream_id: u64) -> Result<i128, PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         creator.require_auth();
         require_not_paused(&env)?;
 
@@ -2998,13 +2996,9 @@ impl OphirPayContract {
             return Err(PaymentError::StreamAlreadyCancelled);
         }
 
-        let now = env.ledger().timestamp();
-        let vested = compute_vested(stream.total_amount, stream.start_time, stream.end_time, now);
-
-        let unvested = stream
-            .total_amount
-            .saturating_sub(vested)
-            .saturating_sub(stream.claimed_amount);
+        // Refund everything still locked: the total minus what has already been
+        // claimed. This is the invariant that preserves LOCKED_BALANCE.
+        let refundable = stream.total_amount.saturating_sub(stream.claimed_amount);
 
         stream.cancelled = true;
         env.storage()
@@ -3014,14 +3008,12 @@ impl OphirPayContract {
             .persistent()
             .extend_ttl(&(STREAM_KEY, stream_id), 5000, 50000);
 
-        if unvested > 0 {
+        if refundable > 0 {
             // Reentrancy-guarded transfer (MEDIUM-4)
-            acquire_reentrancy_lock(&env)?;
             let token_client = token::Client::new(&env, &stream.asset);
             let contract_addr = env.current_contract_address();
-            token_client.transfer(&contract_addr, &creator, &unvested);
-            add_locked(&env, -unvested);
-            release_reentrancy_lock(&env);
+            token_client.transfer(&contract_addr, &creator, &refundable);
+            add_locked(&env, -refundable);
         }
 
         inc_counter(&env, &STAT_STR_CANCELLED);
@@ -3034,7 +3026,7 @@ impl OphirPayContract {
             "Stream cancelled",
         );
 
-        Ok(unvested)
+        Ok(refundable)
     }
 
     /// Get a stream by ID
@@ -3437,6 +3429,7 @@ impl OphirPayContract {
 
     /// Process an approved refund — transfers tokens back to requester.
     pub fn process_refund(env: Env, caller: Address, refund_id: u64) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         caller.require_auth();
         require_owner(&env, &caller)?;
         require_not_paused(&env)?;
@@ -3452,7 +3445,6 @@ impl OphirPayContract {
         }
 
         // Reentrancy-guarded transfer (MEDIUM-4)
-        acquire_reentrancy_lock(&env)?;
         let token_client = token::Client::new(&env, &refund.asset);
         let contract_addr = env.current_contract_address();
         token_client.transfer(&contract_addr, &refund.requester, &refund.amount);
@@ -3465,8 +3457,6 @@ impl OphirPayContract {
         env.storage()
             .persistent()
             .extend_ttl(&(REFUND_KEY, refund_id), 5000, 50000);
-
-        release_reentrancy_lock(&env);
 
         env.events().publish(
             (Symbol::new(&env, "refund"), Symbol::new(&env, "processed")),
@@ -5828,15 +5818,7 @@ mod tests {
         );
 
         assert_eq!(
-            client.try_create_stream(
-                &user,
-                &payee,
-                &1000i128,
-                &sac,
-                &1000u64,
-                &2000u64,
-                &memo
-            ),
+            client.try_create_stream(&user, &payee, &1000i128, &sac, &1000u64, &2000u64, &memo),
             Err(Ok(PaymentError::ReentrantCall))
         );
 
