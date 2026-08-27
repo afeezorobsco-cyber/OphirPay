@@ -33,9 +33,7 @@ impl<'a> TestFixture<'a> {
         let owner = Address::generate(&env);
         let token_admin = Address::generate(&env);
 
-        let token_id = env
-            .register_stellar_asset_contract_v2(token_admin.clone())
-            .address();
+        let token_id = env.register_stellar_asset_contract(token_admin.clone());
         let token_client = token::Client::new(&env, &token_id);
         let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
 
