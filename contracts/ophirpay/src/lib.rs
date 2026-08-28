@@ -818,6 +818,39 @@ fn add_locked(env: &Env, delta: i128) {
     env.storage().instance().set(&LOCKED_BALANCE, &clamped);
 }
 
+/// Collect protocol fees from the payer and transfer to the fee collector.
+/// Returns the fee amount collected (0 if fees are disabled or no collector
+/// is set).  Returns an error if the fee transfer fails — which reverts
+/// the entire payment, ensuring fee collection is atomic.
+fn collect_fee(
+    env: &Env,
+    payer: &Address,
+    asset: &Address,
+    payment_amount: i128,
+) -> Result<i128, PaymentError> {
+    // Read fee config; if disabled or no collector, skip fee collection.
+    let config: FeeConfig = match env.storage().instance().get(&FEE_KEY) {
+        Some(c) if c.enabled => c,
+        _ => return Ok(0),
+    };
+    let collector: Address = match env.storage().instance().get(&FEE_COLL) {
+        Some(c) => c,
+        None => return Ok(0),
+    };
+
+    let fee = calculate_fee(payment_amount, config.payment_fee_bps);
+    if fee <= 0 {
+        return Ok(0);
+    }
+
+    // Transfer fee from payer to collector.  If this fails (insufficient
+    // balance, missing trustline, etc.), the entire payment reverts.
+    let token_client = token::Client::new(env, asset);
+    token_client.transfer(payer, &collector, &fee);
+
+    Ok(fee)
+}
+
 /// Get the current locked balance (funds held in active escrows + streams).
 fn record_audit(env: &Env, action: &str, actor: &Address, target_id: u64, details: &str) {
     let mut count: u64 = env.storage().instance().get(&AUDIT_CNT).unwrap_or(0);
@@ -2005,7 +2038,11 @@ impl OphirPayContract {
             env.storage().persistent().extend_ttl(&key, 5000, 50000);
         }
 
-        // Record payment atomically (only after limit check passes)
+        // Collect protocol fee atomically (only after limit check passes).
+        // If fee transfer fails, the entire atomic_spend reverts.
+        let _fee = collect_fee(&env, &payer, &asset, amount)?;
+
+        // Record payment atomically
         let mut count: u64 = env.storage().instance().get(&PAYMENT_COUNT).unwrap_or(0);
         count = count.saturating_add(1);
 
@@ -2485,6 +2522,11 @@ impl OphirPayContract {
         if amount <= 0 {
             return Err(PaymentError::InvalidAmount);
         }
+
+        // Collect protocol fee before recording.  If fee transfer fails
+        // (insufficient balance, missing trustline), the entire payment
+        // reverts — no partial state.
+        let _fee = collect_fee(&env, &payer, &asset, amount)?;
 
         let mut count: u64 = env.storage().instance().get(&PAYMENT_COUNT).unwrap_or(0);
         count += 1;
@@ -5934,5 +5976,270 @@ mod tests {
         env.ledger().set_timestamp(1_060_000);
         client.claim_escrow(&payee2, &e2);
         assert_eq!(client.get_locked_balance(), 0);
+    }
+
+    // ── Cross-Contract Fee Collection Tests ──────────────────────
+
+    #[test]
+    fn test_fee_collected_on_record_payment() {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().set_timestamp(1_000_000);
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let collector = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+        let sac_client = token::StellarAssetClient::new(&env, &sac);
+        let token_client = token::Client::new(&env, &sac);
+
+        let _ = client.init(&owner);
+
+        // Configure 1% fee (100 bps)
+        client.set_fee_config(&owner, &100u32, &0u32, &0u32, &0i128, &0i128, &true);
+        client.set_fee_collector(&owner, &collector);
+
+        // Fund payer with enough for payment + fee
+        sac_client.mint(&payer, &11_000_000i128);
+
+        let tx_hash = String::from_str(&env, "0xfee_test");
+        let meta = String::from_str(&env, "fee_test");
+
+        let id = client.record_payment(
+            &payer,
+            &payee,
+            &10_000_000i128,
+            &sac,
+            &tx_hash,
+            &meta,
+        );
+        assert_eq!(id, 1);
+
+        // Fee = 10_000_000 * 100 / 10000 = 100_000
+        let fee = client.calculate_fee(&10_000_000i128, &100u32);
+        assert_eq!(fee, 100_000);
+
+        // Collector received the fee
+        assert_eq!(token_client.balance(&collector), 100_000);
+
+        // Payer paid amount + fee
+        assert_eq!(token_client.balance(&payer), 10_000_000 - 100_000);
+
+        // Payee received full amount (fee is separate)
+        assert_eq!(token_client.balance(&payee), 10_000_000);
+    }
+
+    #[test]
+    fn test_no_fee_when_disabled() {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().set_timestamp(1_000_000);
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let collector = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+        let sac_client = token::StellarAssetClient::new(&env, &sac);
+        let token_client = token::Client::new(&env, &sac);
+
+        let _ = client.init(&owner);
+
+        // Fee config disabled
+        client.set_fee_config(&owner, &100u32, &0u32, &0u32, &0i128, &0i128, &false);
+        client.set_fee_collector(&owner, &collector);
+
+        sac_client.mint(&payer, &10_000_000i128);
+
+        let tx_hash = String::from_str(&env, "0xno_fee");
+        let meta = String::from_str(&env, "no_fee");
+
+        let _ = client.record_payment(
+            &payer,
+            &payee,
+            &10_000_000i128,
+            &sac,
+            &tx_hash,
+            &meta,
+        );
+
+        // No fee collected
+        assert_eq!(token_client.balance(&collector), 0);
+
+        // Payer paid only the amount
+        assert_eq!(token_client.balance(&payer), 0);
+    }
+
+    #[test]
+    fn test_no_fee_when_no_collector() {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().set_timestamp(1_000_000);
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+        let sac_client = token::StellarAssetClient::new(&env, &sac);
+        let token_client = token::Client::new(&env, &sac);
+
+        let _ = client.init(&owner);
+
+        // Fee config enabled but no collector set
+        client.set_fee_config(&owner, &100u32, &0u32, &0u32, &0i128, &0i128, &true);
+        // Intentionally NOT setting fee collector
+
+        sac_client.mint(&payer, &10_000_000i128);
+
+        let tx_hash = String::from_str(&env, "0xno_collector");
+        let meta = String::from_str(&env, "no_collector");
+
+        let _ = client.record_payment(
+            &payer,
+            &payee,
+            &10_000_000i128,
+            &sac,
+            &tx_hash,
+            &meta,
+        );
+
+        // No fee collected (no collector configured)
+        assert_eq!(token_client.balance(&payer), 0);
+    }
+
+    #[test]
+    fn test_fee_reverts_on_insufficient_balance() {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().set_timestamp(1_000_000);
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let collector = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+        let sac_client = token::StellarAssetClient::new(&env, &sac);
+        let _ = token::Client::new(&env, &sac);
+
+        let _ = client.init(&owner);
+
+        // Configure 1% fee
+        client.set_fee_config(&owner, &100u32, &0u32, &0u32, &0i128, &0i128, &true);
+        client.set_fee_collector(&owner, &collector);
+
+        // Fund payer with only the payment amount (not enough for fee)
+        sac_client.mint(&payer, &10_000_000i128);
+
+        let tx_hash = String::from_str(&env, "0xinsufficient");
+        let meta = String::from_str(&env, "insufficient");
+
+        // Payment reverts because payer can't cover both payment + fee
+        let res = client.try_record_payment(
+            &payer,
+            &payee,
+            &10_000_000i128,
+            &sac,
+            &tx_hash,
+            &meta,
+        );
+        assert!(res.is_err());
+
+        // Nothing changed
+        assert_eq!(client.get_payment_count(), 0);
+    }
+
+    #[test]
+    fn test_fee_collected_on_atomic_spend() {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().set_timestamp(1_000_000);
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let collector = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+        let sac_client = token::StellarAssetClient::new(&env, &sac);
+        let token_client = token::Client::new(&env, &sac);
+
+        let _ = client.init(&owner);
+
+        // Configure 5% fee (500 bps)
+        client.set_fee_config(&owner, &500u32, &0u32, &0u32, &0i128, &0i128, &true);
+        client.set_fee_collector(&owner, &collector);
+
+        // No spending limit — atomic_spend goes straight to recording
+        sac_client.mint(&payer, &10_500_000i128);
+
+        let tx_hash = String::from_str(&env, "0xatomic_fee");
+        let meta = String::from_str(&env, "atomic_fee");
+
+        let id = client.atomic_spend(
+            &payer,
+            &payee,
+            &10_000_000i128,
+            &sac,
+            &tx_hash,
+            &meta,
+        );
+        assert_eq!(id, 1);
+
+        // Fee = 10_000_000 * 500 / 10000 = 500_000
+        assert_eq!(token_client.balance(&collector), 500_000);
+        assert_eq!(token_client.balance(&payer), 0);
+        assert_eq!(token_client.balance(&payee), 10_000_000);
+    }
+
+    #[test]
+    fn test_zero_fee_bps_collects_nothing() {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().set_timestamp(1_000_000);
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let collector = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+        let sac_client = token::StellarAssetClient::new(&env, &sac);
+        let token_client = token::Client::new(&env, &sac);
+
+        let _ = client.init(&owner);
+
+        // Fee config with 0 bps
+        client.set_fee_config(&owner, &0u32, &0u32, &0u32, &0i128, &0i128, &true);
+        client.set_fee_collector(&owner, &collector);
+
+        sac_client.mint(&payer, &10_000_000i128);
+
+        let tx_hash = String::from_str(&env, "0xzero_bps");
+        let meta = String::from_str(&env, "zero_bps");
+
+        let _ = client.record_payment(
+            &payer,
+            &payee,
+            &10_000_000i128,
+            &sac,
+            &tx_hash,
+            &meta,
+        );
+
+        // No fee collected
+        assert_eq!(token_client.balance(&collector), 0);
+        assert_eq!(token_client.balance(&payer), 0);
+        assert_eq!(token_client.balance(&payee), 10_000_000);
     }
 }
