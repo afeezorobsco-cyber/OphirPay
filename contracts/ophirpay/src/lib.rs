@@ -790,6 +790,14 @@ fn inc_counter(env: &Env, key: &Symbol) {
     env.storage().instance().set(key, &val.saturating_add(1));
 }
 
+/// Add delta to a u64 counter key. Same single-key optimization.
+fn add_u64_counter(env: &Env, key: &Symbol, delta: u64) {
+    let val: u64 = env.storage().instance().get(key).unwrap_or(0);
+    env.storage()
+        .instance()
+        .set(key, &val.saturating_add(delta));
+}
+
 /// Add delta to an i128 counter key. Same single-key optimization.
 /// Same TTL note as inc_counter.
 fn add_counter(env: &Env, key: &Symbol, delta: i128) {
@@ -3790,6 +3798,7 @@ impl OphirPayContract {
 
         inc_counter(&env, &STAT_BATCHES);
         add_counter(&env, &STAT_AMT_BATCHED, total_amount);
+        add_u64_counter(&env, &STAT_PAYMENTS, successful as u64);
 
         record_audit(
             &env,
