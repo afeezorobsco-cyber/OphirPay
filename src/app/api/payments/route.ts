@@ -17,6 +17,7 @@ import { getAuthContext } from "@/lib/auth-session";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
 import { incMetric } from "@/lib/metrics-counters";
+import { buildPaymentWhere } from "@/lib/payment-filters";
 import {
   buildCursorWhere,
   computeNextCursor,
@@ -54,19 +55,13 @@ export const GET = withMetrics("GET /api/payments", withRequestLogging(async fun
     // boundaries, the result is still scoped to the authenticated user.
     const includeDeleted = searchParams.get("includeDeleted") === "true";
 
-    // Always scope to the authenticated user — never expose other users' data
-    const baseWhere: Record<string, unknown> = {
-      userId: auth.userId,
-      ...(includeDeleted ? {} : { deletedAt: null }),
-    };
-    if (status) baseWhere.status = status;
-    if (search) {
-      baseWhere.OR = [
-        { description: { contains: search } },
-        { memo: { contains: search } },
-        { transactionHash: { contains: search } },
-      ];
-    }
+    // Always scope to the authenticated user — never expose other users' data.
+    // `status` and `search` (memo ILIKE + exact tx-hash, Issue #157) use the
+    // shared helper so the list route and CSV export stay in lockstep.
+    const baseWhere = buildPaymentWhere(auth.userId, { status, search });
+    // Soft-deleted rows are hidden by default (issue #50). `includeDeleted` is
+    // the explicit admin/debug opt-in to see them.
+    if (!includeDeleted) baseWhere.deletedAt = null;
 
     // Keyset (cursor) pagination is the default for plain list requests — it
     // never deep-skips, so later pages stay fast as the table grows. Offset

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { PAGE_TITLES } from "@/lib/page-titles";
 import Link from "next/link";
@@ -56,7 +56,9 @@ function PaymentsClient() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [search, setSearch] = useState("");
+  // Pre-populate the search box from `?q=` so filtered views are shareable
+  // (Issue #157: the search param lives in the URL).
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const debouncedSearch = useDebounce(search, 300);
 
   const {
@@ -122,6 +124,12 @@ function PaymentsClient() {
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
+
+  // Mirror the debounced query into the URL so searches are shareable/bookmarked.
+  useEffect(() => {
+    updateQuery({ q: debouncedSearch || null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync the query term
+  }, [debouncedSearch]);
 
   const goToPage = (target: number) =>
     updateQuery({ page: target <= 1 ? null : String(target) });
