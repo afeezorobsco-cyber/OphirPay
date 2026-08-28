@@ -12,6 +12,49 @@ Instead, email **security@ophirpay.com** with:
 
 We will respond within 48 hours and work with you on a fix.
 
+## Responsible Disclosure Process
+
+### Step 1: Report the Vulnerability
+
+Email **security@ophirpay.com** with the following information:
+
+- **Subject**: `[SECURITY] Brief description of the vulnerability`
+- **Body**:
+  - Description of the vulnerability
+  - Steps to reproduce (include URLs, endpoints, and request/response examples if applicable)
+  - Affected versions (check `package.json` or `Cargo.toml`)
+  - Potential impact (what an attacker could achieve)
+  - Any suggested mitigations (if you have them)
+  - Your preferred contact method for follow-up questions
+
+### Step 2: Acknowledgment
+
+We will acknowledge receipt of your report within **48 hours** via email.
+
+### Step 3: Validation
+
+Our security team will validate the vulnerability within **5 business days**. We may contact you for additional details or clarification.
+
+### Step 4: Resolution
+
+Once validated, we will:
+- Develop and test a fix
+- Deploy the fix to production
+- Publish a security advisory on GitHub
+- Credit you in the advisory (unless you prefer anonymity)
+
+### Step 5: Reward
+
+If eligible, you will receive a reward based on the severity of the vulnerability (see Bug Bounty Program below).
+
+## Security.txt
+
+OphirPay publishes a `security.txt` file at `/.well-known/security.txt` following the [RFC 9116](https://www.rfc-editor.org/rfc/rfc9116) standard. This file provides security researchers with contact information and disclosure policies.
+
+The file is accessible at:
+- **Production**: https://ophirpay.vercel.app/.well-known/security.txt
+- **Repository**: https://github.com/OphirPay/OphirPay/blob/main/.well-known/security.txt
+
 ## Security Best Practices
 
 ### For Users
@@ -19,6 +62,7 @@ We will respond within 48 hours and work with you on a fix.
 - Always verify the destination address before signing
 - Check transaction details in Freighter before approving
 - Use a hardware wallet for production/mainnet operations
+- Never share your wallet seed phrase or private keys
 
 ### For Developers
 - Run `npm audit` regularly to check for dependency vulnerabilities
@@ -26,6 +70,8 @@ We will respond within 48 hours and work with you on a fix.
 - Review PRs for security implications
 - Never commit secrets or API keys
 - Use environment variables for all sensitive configuration
+- Follow the principle of least privilege
+- Validate all user inputs server-side
 
 ## Supported Versions
 
@@ -52,6 +98,15 @@ OphirPay offers rewards for responsibly disclosed vulnerabilities:
 - Authentication: Wallet session auth, API key auth
 - Webhook system: URL validation, HMAC signing, SSRF prevention
 - Infrastructure: Dockerfile, Kubernetes manifests, Helm chart
+- Frontend: Next.js application, wallet integration
+
+### Out of Scope
+
+- Denial of service attacks against the infrastructure
+- Social engineering attacks
+- Attacks requiring physical access to user devices
+- Issues in third-party dependencies (report these to the respective maintainers)
+- Issues already reported by someone else
 
 ### Rules
 
@@ -60,6 +115,7 @@ OphirPay offers rewards for responsibly disclosed vulnerabilities:
 3. **Do not** disrupt the live service (ophirpay.vercel.app)
 4. **Do not** disclose the vulnerability publicly before it is resolved
 5. Provide a clear proof-of-concept with steps to reproduce
+6. Report vulnerabilities in good faith
 
 ### Process
 
@@ -77,7 +133,8 @@ OphirPay implements the following security headers:
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `Referrer-Policy: strict-origin-when-cross-origin`
-- `X-XSS-Protection: 0`
+- `X-XSS-Protection: 1; mode=block`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
 
 ## Smart Contract Security
 
@@ -85,3 +142,29 @@ OphirPay implements the following security headers:
 - Cross-contract calls are validated
 - Contracts use Result types for error handling
 - Timestamps and metadata are recorded for audit trails
+- Reentrancy guards protect all token transfer paths
+- Emergency pause functionality available for circuit breaking
+
+## Web & API Security
+
+- CSRF protection with double-submit cookie pattern
+- HMAC-SHA256 signed session cookies
+- API keys hashed at rest with SHA-256
+- SSRF protection for webhook URLs
+- Input validation with Zod schemas
+- Rate limiting (120 RPM default)
+- CSP headers with Stellar-only connect-src
+
+## Contact Information
+
+- **Security Email**: security@ophirpay.com
+- **GitHub Issues**: For non-security bugs only
+- **General Questions**: GitHub Discussions
+
+## Legal
+
+We will not take legal action against researchers who follow this responsible disclosure policy. We consider security research conducted in accordance with this policy to be authorized and will not pursue legal action for accidental, good-faith violations.
+
+---
+
+Last updated: August 2026
