@@ -2,8 +2,6 @@
 
 import { test, expect } from "@playwright/test";
 
-const BASE_URL = process.env.E2E_BASE_URL || "http://localhost:3000";
-
 // Mobile viewport (Pixel 5)
 const MOBILE_VIEWPORT = { width: 412, height: 915 };
 
