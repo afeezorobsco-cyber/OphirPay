@@ -5,6 +5,7 @@ node_modules/
 
 # testing
 coverage/
+dependency-audit-report/
 
 # next.js
 .next/

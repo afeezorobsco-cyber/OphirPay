@@ -631,21 +631,32 @@ jobs:
             echo "✅ Helm chart renders successfully ($(wc -l < /tmp/rendered.yaml) lines)"
 
   # ══════════════════════════════════════════════════════════════
-  # 20. DEPENDENCY AUDIT — npm audit for vulnerabilities
+  # 20. DEPENDENCY SCAN — fail on high/critical advisories
+  #
+  # Blocking gate (issue #394): runs the shared scan script
+  # (scripts/audit-dependencies.mjs) which applies the documented
+  # suppressions from .github/dependency-suppressions.json and fails the
+  # build on any remaining high/critical advisory. The nightly + on-demand
+  # run lives in .github/workflows/dependency-scan.yml.
   # ══════════════════════════════════════════════════════════════
-  dependency-audit:
-    name: "2️⃣0️⃣ Security — Audit (npm)"
+  dependency-scan:
+    name: "2️⃣0️⃣ Security — Dependency Scan (fail on high/critical)"
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    continue-on-error: true  # Don't block PRs, just surface warnings
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version-file: '.nvmrc', cache: "npm" }
-      - name: npm audit (production deps only, no fix)
-        run: npm audit --omit=dev --audit-level=high 2>&1 || true
-      - name: npm audit (all deps, report only)
-        run: npm audit --audit-level=critical 2>&1 || true
+      - run: npm ci
+      - name: Run dependency vulnerability scan
+        run: node scripts/audit-dependencies.mjs
+      - name: Upload audit report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-report
+          path: dependency-audit-report/
+          retention-days: 30
 
   # ══════════════════════════════════════════════════════════════
   # 21. CONTRACT GAS REPORT — WASM analysis via stellar CLI
