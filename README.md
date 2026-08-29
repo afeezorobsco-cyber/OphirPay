@@ -79,6 +79,7 @@
 - [🛠 Tech Stack](#-tech-stack)
 - [📊 Database Schema](docs/SCHEMA.md)
 - [🚀 Deployment Guide](docs/DEPLOYMENT.md)
+- [📡 SSE Event Stream](docs/SSE.md)
 - [🤝 Contributing](#-contributing)
 - [📖 Stellar Glossary](GLOSSARY.md)
 - [🗺 Roadmap](#-roadmap)
@@ -350,6 +351,10 @@ Browser ←──SSE stream─── GET /api/events ──polls──→ Paymen
 | `payment:created` | New payment event detected on-chain |
 
 Visit **`/events`** in the app to see the live feed with connection status indicator, event type badges, timestamps, and auto-scroll.
+
+> 📡 **Client integrations:** see [docs/SSE.md](docs/SSE.md) for the full stream
+> contract — payload schemas for every event type, heartbeat/error behavior,
+> reconnection semantics, and example client code (browser, React, cURL).
 
 ---
 
