@@ -328,6 +328,23 @@ jobs:
           retention-days: 7
 
   # ══════════════════════════════════════════════════════════════
+  # 10c. PRISMA DRIFT CHECK — static schema ⇄ migration sync check
+  # (issue #404). No database connection required: parses schema.prisma
+  # and replays the committed migration SQL to detect drift.
+  # ══════════════════════════════════════════════════════════════
+  prisma-drift-check:
+    name: "🔟c Backend — Prisma Drift Check (no DB)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc', cache: "npm" }
+      - run: npm ci
+      - name: Verify schema and migrations are in sync
+        run: node scripts/verify-prisma-drift.mjs
+
+  # ══════════════════════════════════════════════════════════════
   # 11. PRISMA VALIDATE — Schema integrity, generate, db push
   # ══════════════════════════════════════════════════════════════
   prisma-validate:
