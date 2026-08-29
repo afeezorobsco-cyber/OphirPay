@@ -177,6 +177,15 @@ jobs:
           restore-keys: cargo-repro-${{ runner.os }}-
       - name: Verify WASM reproducibility against committed expected hashes
         run: ./scripts/verify-wasm-reproducibility.sh
+      - name: Upload raw WASM artifacts (debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-repro-raw
+          path: |
+            contracts/ophirpay/target/wasm32v1-none/release/*.wasm
+            contracts/emitter/target/wasm32v1-none/release/*.wasm
+          retention-days: 7
 
   # ══════════════════════════════════════════════════════════════
   # 7. RUST CLIPPY — Lint both Soroban contracts
