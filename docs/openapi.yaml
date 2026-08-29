@@ -550,6 +550,30 @@ paths:
           description: Batch details with child payments
         "404":
           $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Batches]
+      summary: Bulk-cancel a batch's PENDING payments
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      description: >
+        Cancels all PENDING payments of the batch in one request. Payments that
+        have already been submitted (any non-PENDING status) are left untouched
+        and reported via `skipped`, so callers see exactly what changed.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Counts of cancelled / skipped / total payments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkCancelBatchResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ── Recurring Payments ────────────────────────────────────
   /api/recurring:
@@ -1423,6 +1447,28 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PaymentResponse"
+
+    BulkCancelBatchResponse:
+      type: object
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: object
+          properties:
+            batchId: { type: string }
+            cancelled:
+              type: integer
+              description: Number of PENDING payments flipped to CANCELLED
+            skipped:
+              type: integer
+              description: Number of already-submitted (non-PENDING) payments left untouched
+            total:
+              type: integer
+              description: Total child payments in the batch
+        meta:
+          type: object
+          properties:
+            timestamp: { type: string, format: date-time }
 
     PaginatedBatches:
       type: object

@@ -459,6 +459,33 @@ curl "$BASE/api/batches/cm0bt0000000000000000001" -H "X-API-Key: $KEY"
 }
 ```
 
+### Bulk-cancel a batch's pending payments — `POST /api/batches/{id}`
+
+Auth: **required**. Cancels all PENDING child payments of the batch in one
+request. Already-submitted (non-PENDING) payments are skipped — never cancelled
+— and reported via `skipped`, so you can clean up a failed batch's leftover
+pending rows in a single call.
+
+```bash
+curl -X POST "$BASE/api/batches/cm0bt0000000000000000001" -H "X-API-Key: $KEY"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "batchId": "cm0bt0000000000000000001",
+    "cancelled": 2,
+    "skipped": 1,
+    "total": 3
+  },
+  "meta": { "timestamp": "2026-08-26T11:22:00.123Z" }
+}
+```
+
+Returns `404 NOT_FOUND` when the batch does not exist or belongs to another
+user.
+
 ## Recurring payments
 
 ### List recurring payments — `GET /api/recurring`
@@ -2001,6 +2028,7 @@ ophirpay_webhooks_failed_total 2
 | `/api/payments/export` | GET | ✅ | Payments |
 | `/api/batches` | GET, POST | ✅ | Batches |
 | `/api/batches/{id}` | GET | ✅ | Batches |
+| `/api/batches/{id}` | POST | ✅ | Bulk-cancel pending payments (Issue #158) |
 | `/api/recurring` | GET, POST | ✅ | Recurring payments |
 | `/api/recurring/{id}` | GET | ✅ | Recurring payments |
 | `/api/requests` | GET, POST | ✅ | Payment requests |

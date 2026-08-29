@@ -137,6 +137,14 @@ const STATE_CHANGING_ROUTES: RouteEntry[] = [
     csrfProtected: false,
     description: "Create batch payment (client-side signing)",
   },
+  {
+    method: "POST",
+    path: "/api/batches/[id]",
+    authRequired: true,
+    requiredRole: null,
+    csrfProtected: false,
+    description: "Bulk-cancel a batch's pending payments (user-scoped)",
+  },
 
   // ── Recurring ───────────────────────────────────────────────
   {
