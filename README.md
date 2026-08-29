@@ -79,7 +79,9 @@
 - [🛠 Tech Stack](#-tech-stack)
 - [📊 Database Schema](docs/SCHEMA.md)
 - [🚀 Deployment Guide](docs/DEPLOYMENT.md)
+<<<<<<< HEAD
 - [📡 SSE Event Stream](docs/SSE.md)
+- [🧭 Mainnet Runbook](docs/MAINNET_RUNBOOK.md)
 - [🤝 Contributing](#-contributing)
 - [📖 Stellar Glossary](GLOSSARY.md)
 - [🗺 Roadmap](#-roadmap)

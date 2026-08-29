@@ -2,6 +2,11 @@
 
 This guide walks through deploying OphirPay to Stellar Mainnet with PostgreSQL, Soroban contracts, Kubernetes, and monitoring.
 
+> 🚀 **Looking for the executable checklist?** Use the
+> [**Mainnet Deployment Runbook**](./MAINNET_RUNBOOK.md) — it consolidates this
+> guide into a step-by-step runbook with a pre-flight checklist (funding, WASM
+> hashes, contract IDs), rollback procedures, and post-deploy verification.
+
 ## Pre-Flight Checklist
 
 - [ ] Stellar Mainnet Horizon URL and Soroban RPC URL obtained
