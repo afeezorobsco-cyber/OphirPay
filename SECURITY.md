@@ -72,6 +72,8 @@ The file is accessible at:
 - Use environment variables for all sensitive configuration
 - Follow the principle of least privilege
 - Validate all user inputs server-side
+- Follow the [Secrets Rotation Runbook](docs/SECRETS_ROTATION.md) for all secret rotation procedures
+- Rotate secrets every 90 days or immediately on suspected compromise
 
 ## Supported Versions
 
@@ -187,6 +189,17 @@ AUDIT_FAIL_ON=critical node scripts/audit-dependencies.mjs   # critical only
 ```
 
 The JSON report lands in `dependency-audit-report/`.
+
+## Secrets Management
+
+OphirPay maintains a complete inventory of secrets, their storage locations,
+and rotation procedures in [docs/SECRETS_ROTATION.md](docs/SECRETS_ROTATION.md).
+
+Key points:
+- All secrets are stored in environment variables or platform secrets managers (never in code)
+- Git history has been audited — no real secrets have been committed
+- Gitleaks scans run on every push and PR via CI
+- Secrets should be rotated every 90 days
 
 ## Contact Information
 
