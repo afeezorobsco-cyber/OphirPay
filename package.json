@@ -46,6 +46,7 @@
     "db:seed": "npx tsx prisma/seed.ts",
     "db:push": "prisma db push",
     "db:validate": "prisma validate && prisma generate",
+    "db:validate:migrations": "bash scripts/validate-prisma-migrations.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
