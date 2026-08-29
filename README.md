@@ -69,6 +69,7 @@
 - [🚀 Live Demo](#-live-demo)
 - [🧭 System Architecture](#-system-architecture)
 - [⚡ Quick Start](#-quick-start)
+- [🛠 Local Development Guide](docs/LOCAL_DEV.md)
 - [🔐 Wallet Integration](#-wallet-integration)
 - [📡 Real-Time Events](#-real-time-events)
 - [🧪 Smart Contracts](#-smart-contracts)
