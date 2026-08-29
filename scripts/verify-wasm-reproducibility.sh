@@ -38,7 +38,9 @@ build() {
   echo "▶ Building $contract_dir (pinned toolchain, $TARGET, release)..."
   (
     cd "$ROOT/$contract_dir"
-    RUSTFLAGS="$RUSTFLAGS" cargo build --target "$TARGET" --release
+    # --locked makes CI fail fast if the committed Cargo.lock is out of date
+    # (the lockfile pins the dependency graph so builds are reproducible).
+    RUSTFLAGS="$RUSTFLAGS" cargo build --locked --target "$TARGET" --release
   )
 }
 

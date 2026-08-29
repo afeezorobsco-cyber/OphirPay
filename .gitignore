@@ -57,7 +57,8 @@ contracts/**/target/wasm32-unknown-unknown/release/.cargo-*
 contracts/**/target/wasm32-unknown-unknown/release/*.d
 contracts/**/target/.rustc_info.json
 contracts/**/target/CACHEDIR.TAG
-contracts/**/Cargo.lock
+# Cargo.lock is intentionally committed: the WASM reproducibility check
+# (issue #405) requires a pinned dependency graph to produce identical bytes.
 
 # Soroban
 .soroban/
