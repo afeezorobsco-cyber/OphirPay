@@ -26,7 +26,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HASH_FILE="$ROOT/contracts/expected-wasm-hashes.sha256"
 TARGET="wasm32v1-none"
-RUSTFLAGS="-C link-arg=-s"
+
+# Build deterministically: `file!()`-style macros inside dependency sources
+# embed the absolute CARGO_HOME registry path (e.g. /home/runner/.cargo vs
+# /home/user/.cargo), which would make the WASM bytes differ between
+# machines. Remap CARGO_HOME to a fixed, environment-independent prefix so
+# every build produces identical bytes regardless of where cargo lives.
+REMAP_PREFIX="/cargo-home"
+RUSTFLAGS="-C link-arg=-s --remap-path-prefix=${CARGO_HOME:-"$HOME/.cargo"}=$REMAP_PREFIX"
 
 # A temp dir that mirrors the repo layout used in the hash file, so
 # sha256sum -c works against our committed file verbatim.
