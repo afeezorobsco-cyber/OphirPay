@@ -585,7 +585,7 @@ Contracts) at desktop width, in both light and dark themes. Baselines live in
 # Compare the live render against committed baselines
 npm run test:visual
 
-# Intentionally update baselines (commit the regenerated PNGs)
+# Intentionally update baselines (commit the regenerated PNG images)
 npm run test:visual:update
 ```
 
