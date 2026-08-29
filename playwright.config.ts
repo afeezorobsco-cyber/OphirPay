@@ -6,7 +6,13 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 2 : undefined,
-  reporter: [["html", { open: "never" }], ["list"]],
+  // In CI the suite is sharded across parallel runners; each shard emits a
+  // blob report that the `e2e-report` job merges into a single combined
+  // report (see .github/workflows/ci.yml). Locally the html + list reporters
+  // behave as before.
+  reporter: process.env.CI
+    ? [["blob", { outputDir: "blob-report" }], ["html", { open: "never" }], ["list"]]
+    : [["html", { open: "never" }], ["list"]],
   use: {
     baseURL: process.env.E2E_BASE_URL || "http://localhost:3000",
     trace: "on-first-retry",

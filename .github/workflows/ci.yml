@@ -252,7 +252,8 @@ jobs:
           echo "✅ All 19 pages healthy"
 
   # ══════════════════════════════════════════════════════════════
-  # 10. E2E TESTS — Playwright against a self-hosted production build.
+  # 10. E2E TESTS — Playwright against a self-hosted production build,
+  # sharded across 4 parallel workers (issue #406).
   #
   # The E2E suite is deterministic by design (auth-gate 401s, wallet-gated
   # page states, health 200|503), so it runs against a production build +
@@ -260,12 +261,23 @@ jobs:
   # depends on a working production DATABASE_URL. The build happens in this
   # job rather than reusing the next-build artifact: upload-artifact@v4
   # excludes gitignored paths and `.next/` is gitignored.
+  #
+  # The suite is split into 4 equal shards by spec file (Playwright's
+  # --shard flag balances by test file). Each shard uploads its blob report;
+  # the e2e-report job below downloads every blob and merges them into one
+  # combined HTML report. On a shard failure, the same runner immediately
+  # reruns only the failed tests (--last-failed) for flaky triage.
   # ══════════════════════════════════════════════════════════════
   e2e-tests:
-    name: "🔟 Frontend — E2E (Playwright)"
+    name: "🔟 Frontend — E2E (Playwright ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})"
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: contract-wasm
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3, 4]
+        shardTotal: [4]
     services:
       postgres:
         image: postgres:16-alpine
@@ -317,13 +329,53 @@ jobs:
             sleep 2
           done
           curl -sf -o /dev/null http://localhost:3000/ || { echo "next start failed to come up"; tail -20 /tmp/next-start.log; exit 1; }
-      - name: Run E2E tests against production build
-        run: npx playwright test --project=chromium
+      - name: Run E2E tests against production build (shard)
+        run: npx playwright test --project=chromium --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+      - name: Rerun only failed tests (flaky triage)
+        if: failure()
+        run: npx playwright test --project=chromium --last-failed
+      - name: Upload blob report for shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ matrix.shardIndex }}
+          path: blob-report/
+          retention-days: 1
       - name: Upload E2E report on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shardIndex }}
+          path: playwright-report/
+          retention-days: 7
+
+  # ══════════════════════════════════════════════════════════════
+  # 10b. E2E COMBINED REPORT — merge every shard's blob report into a
+  # single HTML report (issue #406). Runs after all shards finish.
+  # ══════════════════════════════════════════════════════════════
+  e2e-report:
+    name: "🔟b Frontend — E2E Combined Report"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: e2e-tests
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc', cache: "npm" }
+      - run: npm ci
+      - name: Download all shard blob reports
+        uses: actions/download-artifact@v4
+        with:
+          path: all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+      - name: Merge into single HTML report
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+      - name: Upload combined report
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-combined
           path: playwright-report/
           retention-days: 7
 
