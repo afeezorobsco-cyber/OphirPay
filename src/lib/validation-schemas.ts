@@ -229,12 +229,24 @@ export const createRecurrenceSchema = createRecurringSchema;
 
 // ── Refund Schemas ────────────────────────────────────────────
 
+/**
+ * Coded refund reasons (0–5), shared by the analytics bucketing in
+ * GET /api/refunds?analytics=true and the POST validation below.
+ */
+export const REFUND_REASON_CODES = [0, 1, 2, 3, 4, 5] as const;
+export type RefundReasonCode = (typeof REFUND_REASON_CODES)[number];
+
 export const requestRefundSchema = z.object({
   paymentId: z.number().int().positive(),
   amount: z.number().positive(),
   asset: z.string().min(1),
   reason: z.string().max(500),
-  reasonCode: z.number().int().min(0).max(5),
+  reasonCode: z
+    .number()
+    .int()
+    .refine((v) => (REFUND_REASON_CODES as readonly number[]).includes(v), {
+      message: "reasonCode must be one of the supported codes: 0-5",
+    }),
 });
 
 /**

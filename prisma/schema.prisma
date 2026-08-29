@@ -500,6 +500,35 @@ model Refund {
   @@index([status])
   /// Speeds up "all refunds for a payment".
   @@index([paymentId])
+  /// One refund per payment per user (idempotency, issue #365). Duplicate
+  /// submissions hit this unique index and fail closed with a 409.
+  @@unique([userId, paymentId])
+}
+
+// ── Audit log ─────────────────────────────────────────────────
+
+/// Persisted off-chain audit trail (issue #365). Complements the contract's
+/// on-chain audit ledger: lifecycle actions on refunds (and any future
+/// record) are written here with their DB record id, so history is
+/// queryable via GET /api/audit-log?source=db|all.
+model AuditLog {
+  /// Primary key — CUID generated at insert time.
+  id        String   @id @default(cuid())
+  /// Action identifier, e.g. "refund:create".
+  action    String
+  /// Actor (user id or API key id) that performed the action.
+  actor     String?
+  /// Target record id this action refers to (e.g. the refund id).
+  target    String?
+  /// Structured extra context (paymentId, reasonCode, onChainId, ...).
+  details   Json?
+  /// Client IP that performed the action, when known.
+  ip        String?
+  /// When the action was recorded.
+  createdAt DateTime @default(now())
+
+  /// Speeds up history queries by action/target.
+  @@index([action, target])
 }
 
 /// Lifecycle of a Refund row, mirroring the on-chain refund state machine.
