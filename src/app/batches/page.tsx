@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { PAGE_TITLES } from "@/lib/page-titles";
@@ -11,8 +11,12 @@ import { timeAgo, getStatusColor } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { Card } from "@/components/ui/Card";
+import { ProgressBar } from "@/components/ui/ProgressBar";
 import { useApiQuery } from "@/hooks/useApiQuery";
-import type { Batch } from "@/types";
+import { useQueryClient } from "@tanstack/react-query";
+import { connectLiveEvents } from "@/lib/events/event-client";
+import type { Batch, BatchStatus } from "@/types";
 
 interface BatchListMeta {
   nextCursor?: string | null;
@@ -25,15 +29,53 @@ interface BatchListResult {
   meta?: BatchListMeta;
 }
 
+interface BatchSummary {
+  counts: { total: number } & Record<BatchStatus, number>;
+  progress: { total: number; completed: number; failed: number; pending: number };
+  batches: (Batch & {
+    paymentCounts: { total: number; completed: number; failed: number; pending: number };
+  })[];
+}
+
 const PAGE_LIMIT = 50;
+// Status cards are rendered in a stable order matching BatchStatus.
+const STATUS_ORDER: BatchStatus[] = [
+  "CREATED",
+  "PROCESSING",
+  "PARTIALLY_COMPLETED",
+  "COMPLETED",
+  "FAILED",
+];
 
 export default function BatchesPage() {
   usePageTitle(PAGE_TITLES.BATCHES);
   const router = useRouter();
+  const queryClient = useQueryClient();
+
   // Keyset pagination: `cursor` is the boundary of the current page;
   // `cursorStack` remembers prior page boundaries so Previous works.
   const [cursor, setCursor] = useState<string | null>(null);
   const [cursorStack, setCursorStack] = useState<string[]>([]);
+
+  // ── Summary (status counts + per-batch drill-down) ─────────────
+  const {
+    data: summary,
+    isLoading: summaryLoading,
+  } = useApiQuery<BatchSummary>(
+    ["batches", "summary"],
+    "/api/batches/summary",
+    { refetchInterval: 30000 }
+  );
+
+  // Keep the summary live: any payment event on the stream refreshes the
+  // cached batch list + summary so counts and per-batch progress stay current.
+  useEffect(() => {
+    return connectLiveEvents({
+      onEvent: () => {
+        queryClient.invalidateQueries({ queryKey: ["batches"] });
+      },
+    });
+  }, [queryClient]);
 
   const {
     data,
@@ -80,6 +122,20 @@ export default function BatchesPage() {
     setCursor(prevCursor);
   };
 
+  // ── Summary card config ─────────────────────────────────────────
+  const totalBatches = summary?.counts?.total ?? 0;
+  const summaryLoadingFull = summaryLoading && totalBatches === 0;
+
+  const summaryCards = STATUS_ORDER.map((status) => ({
+    status,
+    count: summary?.counts?.[status] ?? 0,
+    color: getStatusColor(status),
+  }));
+
+  const progress = summary?.progress;
+  const totalPayments = progress?.total ?? 0;
+  const completedPct = totalPayments > 0 ? ((progress?.completed ?? 0) / totalPayments) * 100 : 0;
+
   return (
     <div className="space-y-6 animate-fade-in">
       <Breadcrumb items={[{ label: "Batches" }]} />
@@ -101,6 +157,46 @@ export default function BatchesPage() {
           New Batch
         </Link>
       </div>
+
+      {/* ── Summary view ────────────────────────────────────────── */}
+      {summaryLoadingFull ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-24 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {summaryCards.map((card) => (
+            <div
+              key={card.status}
+              className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4"
+            >
+              <div className="flex items-center gap-2">
+                <span className={`h-2 w-2 rounded-full ${card.color.dot}`} />
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                  {card.status.replace(/_/g, " ")}
+                </span>
+              </div>
+              <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white tabular-nums">
+                {card.count}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Global progress across all batches ──────────────────── */}
+      <Card title="Batch Progress" subtitle={`${totalPayments} payments across ${totalBatches} batch${totalBatches !== 1 ? "es" : ""}`} padding="md">
+        <div className="space-y-3">
+          <ProgressBar value={completedPct} max={100} variant="success" showLabel />
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+            <span><span className="font-semibold text-green-600 dark:text-green-400">{progress?.completed ?? 0}</span> completed</span>
+            <span><span className="font-semibold text-red-600 dark:text-red-400">{progress?.failed ?? 0}</span> failed</span>
+            <span><span className="font-semibold text-blue-600 dark:text-blue-400">{progress?.pending ?? 0}</span> pending</span>
+          </div>
+        </div>
+      </Card>
 
       {error && (
         <div className="p-4 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30">
@@ -131,6 +227,7 @@ export default function BatchesPage() {
                 <tr className="text-left text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50">
                   <th className="py-3 px-4 font-medium">Name</th>
                   <th className="py-3 px-4 font-medium">Payments</th>
+                  <th className="py-3 px-4 font-medium">Progress</th>
                   <th className="py-3 px-4 font-medium">Status</th>
                   <th className="py-3 px-4 font-medium">Created</th>
                 </tr>
@@ -138,7 +235,18 @@ export default function BatchesPage() {
               <tbody>
                 {batches.map((batch) => {
                   const statusColor = getStatusColor(batch.status);
-                  const paymentCount = batch.payments?.length ?? 0;
+                  // Use the per-batch payment progress from the summary when
+                  // available (consistent source of truth); fall back to the
+                  // raw payments array otherwise.
+                  const drillDown = summary?.batches?.find((s) => s.id === batch.id);
+                  const paymentCount = batch.payments?.length
+                    ?? drillDown?.paymentCounts?.total
+                    ?? 0;
+                  const completed = drillDown?.paymentCounts?.completed ?? 0;
+                  const failed = drillDown?.paymentCounts?.failed ?? 0;
+                  const pending = drillDown?.paymentCounts?.pending ?? paymentCount - completed - failed;
+                  const pct = paymentCount > 0 ? (completed / paymentCount) * 100 : 0;
+
                   return (
                     <tr
                       key={batch.id}
@@ -152,6 +260,20 @@ export default function BatchesPage() {
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-700 dark:text-gray-300">
                         {paymentCount} payment{paymentCount !== 1 ? "s" : ""}
+                      </td>
+                      <td className="py-3 px-4 min-w-[160px]">
+                        {paymentCount > 0 ? (
+                          <>
+                            <ProgressBar value={pct} max={100} variant={completed === paymentCount ? "success" : failed > 0 ? "warning" : "default"} />
+                            <div className="mt-1 flex gap-x-3 text-xs text-gray-500 dark:text-gray-400">
+                              <span className="text-green-600 dark:text-green-400">{completed} ok</span>
+                              {failed > 0 && <span className="text-red-600 dark:text-red-400">{failed} failed</span>}
+                              {pending > 0 && <span className="text-blue-600 dark:text-blue-400">{pending} pending</span>}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
                       </td>
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor.bg} ${statusColor.text}`}>
