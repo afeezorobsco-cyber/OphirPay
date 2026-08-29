@@ -55,6 +55,6 @@ jobs:
           npx prisma migrate diff
           --from-migrations prisma/migrations
           --to-schema-datamodel prisma/schema.prisma
-          --shadow-database-url "$DATABASE_URL"
+          --shadow-database-url "postgresql://prisma:prisma@localhost:5432/postgres"
       - run: npx prisma migrate deploy
       - run: npx vitest run src/__tests__/prisma-schema-ci.test.ts
