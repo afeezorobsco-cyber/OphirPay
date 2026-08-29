@@ -15,6 +15,7 @@ import {
   NETWORK_PASSPHRASE,
 } from "@/lib/stellar";
 import { formatAmount, shortenAddress } from "@/lib/utils";
+import { validateMemo } from "@/lib/validation-helpers";
 import { estimateBatchFee } from "@/lib/fee-estimator";
 import { BatchConfirmDialog } from "@/components/BatchConfirmDialog";
 import { CopyButton } from "@/components/ui/CopyButton";
@@ -122,10 +123,9 @@ export default function NewBatchPage() {
         );
         return false;
       }
-      if (r.memo.length > 28) {
-        setValidationError(
-          `Recipient #${i + 1}: memo must be 28 characters or fewer.`
-        );
+      const memoError = validateMemo(r.memo);
+      if (memoError) {
+        setValidationError(`Recipient #${i + 1}: ${memoError}.`);
         return false;
       }
       totalAmount += amountNum;

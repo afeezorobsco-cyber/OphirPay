@@ -2,6 +2,9 @@
 
 import type { BatchRecipient } from "@/types";
 
+/** Control characters (C0/C1) — never legitimate memo content. */
+const MEMO_CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/;
+
 /**
  * Parse a CSV file into batch payment recipients.
  * Expected CSV format: address,amount,assetCode,memo
@@ -46,6 +49,26 @@ export async function parseRecipientsCsv(file: File): Promise<{
     if (isNaN(amount) || amount <= 0) {
       errors.push({ row, message: `Invalid amount at row ${row}.` });
       continue;
+    }
+
+    // Memo validation mirrors the server-side memoField rules (max 28 UTF-8
+    // bytes, printable text only) so invalid memos are caught at import time
+    // instead of being rejected later by the batch API.
+    if (memo) {
+      if (MEMO_CONTROL_CHARS.test(memo)) {
+        errors.push({
+          row,
+          message: `Memo at row ${row} must not contain control or invisible characters.`,
+        });
+        continue;
+      }
+      if (new TextEncoder().encode(memo).length > 28) {
+        errors.push({
+          row,
+          message: `Memo at row ${row} must be 28 bytes or fewer.`,
+        });
+        continue;
+      }
     }
 
     recipients.push({

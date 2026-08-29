@@ -23,6 +23,7 @@ import {
   SPONSOR_MIN_STARTING_BALANCE,
 } from "@/lib/stellar";
 import { formatAmount, shortenAddress } from "@/lib/utils";
+import { validateMemo } from "@/lib/validation-helpers";
 import { recordPaymentOnChain } from "@/lib/contracts";
 import { estimateTransactionFee } from "@/lib/fee-estimator";
 import { useToast } from "@/components/ui/Toast";
@@ -265,8 +266,9 @@ function SendPageClient() {
       setValidationError("Please enter a valid amount greater than 0.");
       return false;
     }
-    if (memo.length > 28) {
-      setValidationError("Memo must be 28 characters or fewer.");
+    const memoError = validateMemo(memo);
+    if (memoError) {
+      setValidationError(memoError);
       return false;
     }
     if (

@@ -2,8 +2,10 @@
 import { withMetrics } from "@/lib/metrics-middleware";
 
 import prisma from "@/lib/prisma";
+import { updatePaymentSchema } from "@/lib/validation-schemas";
 import {
   successResponse,
+  validationError,
   notFoundError,
   unauthorizedError,
   handleApiError,
@@ -52,7 +54,13 @@ export const PATCH = withMetrics("PATCH /api/payments/[id]", withRequestLogging(
     }
 
     const { id } = await params;
-    const body = await request.json() as { status?: string; description?: string; memo?: string };
+    const rawBody = await request.json();
+    // Validate the whole update body (status enum, description, memo length /
+    // charset) server-side so invalid memos never reach the database or the
+    // webhook payloads.
+    const parsed = updatePaymentSchema.safeParse(rawBody);
+    if (!parsed.success) return validationError(parsed.error);
+    const body = parsed.data;
 
     // updateMany scopes the write to the authenticated user's records and
     // excludes soft-deleted payments (consistent 404, same as GET).

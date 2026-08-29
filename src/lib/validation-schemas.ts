@@ -10,6 +10,45 @@ export const stellarAddress = z
 
 export const apiKeyId = z.string().min(1, "API key ID is required");
 
+// ── Memo Field ────────────────────────────────────────────────
+// Stellar MEMO_TEXT is limited to 28 UTF-8 *bytes* (not characters) and is
+// expected to be plain printable text. Enforced server-side on every route
+// that accepts a memo (payments, batches, multisig, updates) so invalid
+// memos are rejected with a user-facing validation error before they reach
+// persistence or transaction building.
+//
+// Charset: C0/C1 control characters (NUL, newlines, tabs, ESC, …) are
+// rejected outright — they are never legitimate memo content and rejecting
+// them keeps memos safe to render, log, and export.
+const MEMO_CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/;
+
+/** Error messages shown to users when a memo fails validation. */
+export const MEMO_ERROR_MESSAGES = {
+  tooLong: "Memo must be 28 characters or fewer",
+  tooManyBytes:
+    "Memo must be 28 bytes or fewer (non-ASCII characters count more)",
+  controlChars: "Memo must not contain control or invisible characters",
+} as const;
+
+/**
+ * Shared optional memo field for every schema that accepts a memo.
+ * Trims surrounding whitespace, then enforces the Stellar byte limit and a
+ * printable-text charset.
+ */
+export const memoField = z
+  .string()
+  .trim()
+  .refine((v) => !MEMO_CONTROL_CHARS.test(v), {
+    message: MEMO_ERROR_MESSAGES.controlChars,
+  })
+  .refine((v) => v.length <= 28, {
+    message: MEMO_ERROR_MESSAGES.tooLong,
+  })
+  .refine((v) => new TextEncoder().encode(v).length <= 28, {
+    message: MEMO_ERROR_MESSAGES.tooManyBytes,
+  })
+  .optional();
+
 // ── Payment Schemas ───────────────────────────────────────────
 
 export const createPaymentSchema = z.object({
@@ -19,7 +58,7 @@ export const createPaymentSchema = z.object({
   assetCode: z.string().default("XLM"),
   assetIssuer: z.string().optional(),
   description: z.string().max(200).optional(),
-  memo: z.string().max(28).optional(),
+  memo: memoField,
 });
 
 /** Body for POST /api/payments/retry — which failed payment to retry. */
@@ -27,10 +66,24 @@ export const retryPaymentSchema = z.object({
   id: z.string().min(1, "Payment id is required"),
 });
 
+// All statuses the PATCH route can transition a payment through (the webhook
+// dispatcher reacts to SIGNED / SUBMITTED / CONFIRMED / COMPLETED / FAILED).
+export const paymentUpdateStatusValues = [
+  "CREATED",
+  "SIGNED",
+  "SUBMITTED",
+  "CONFIRMED",
+  "PENDING",
+  "PROCESSING",
+  "COMPLETED",
+  "FAILED",
+  "CANCELLED",
+] as const;
+
 export const updatePaymentSchema = z.object({
-  status: z.enum(["CREATED", "PENDING", "COMPLETED", "FAILED", "CANCELLED"]).optional(),
+  status: z.enum(paymentUpdateStatusValues).optional(),
   description: z.string().max(500).optional(),
-  memo: z.string().max(28).optional(),
+  memo: memoField,
 });
 
 // Keep in sync with the PaymentStatus enum in prisma/schema.prisma.
@@ -61,7 +114,7 @@ export const batchRecipientSchema = z.object({
   address: stellarAddress,
   amount: z.number().positive("Amount must be greater than zero"),
   assetCode: z.string().default("XLM"),
-  memo: z.string().max(28).optional(),
+  memo: memoField,
 });
 
 export const createBatchSchema = z.object({
@@ -83,7 +136,7 @@ export const proposeMultisigPaymentSchema = z.object({
   payee: z.string().min(1, "Payee address is required"),
   amount: z.number().positive("Amount must be greater than zero"),
   assetCode: z.string().optional(),
-  memo: z.string().max(28).optional(),
+  memo: memoField,
 });
 
 export const approveMultisigSchema = z.object({
