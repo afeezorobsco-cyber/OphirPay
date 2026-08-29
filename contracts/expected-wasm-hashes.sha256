@@ -1,0 +1,2 @@
+947d51abe8248b46d72edbe429ffc5203a112f150ead886b92dc3212634c21ce  contracts/ophirpay/target/wasm32v1-none/release/ophirpay_contract.wasm
+94f8a657de41038231af27146ca6e7c083a12a35f668611114f799444282826a  contracts/emitter/target/wasm32v1-none/release/ophirpay_emitter.wasm

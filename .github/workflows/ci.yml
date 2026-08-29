@@ -150,10 +150,39 @@ jobs:
           retention-days: 7
 
   # ══════════════════════════════════════════════════════════════
-  # 6. RUST CLIPPY — Lint both Soroban contracts
+  # 6. CONTRACT WASM REPRODUCIBILITY — Byte-for-byte deterministic build check
+  #    (issue #405: pinned toolchain + committed expected hashes; on failure
+  #    the job prints BOTH the expected and the actual hash)
+  # ══════════════════════════════════════════════════════════════
+  wasm-repro:
+    name: "6️⃣ Contracts — WASM Reproducibility Check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.91.0
+        with:
+          targets: wasm32v1-none
+      - name: Install build deps
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq build-essential
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            contracts/ophirpay/target
+            contracts/emitter/target
+          key: cargo-repro-${{ runner.os }}-${{ hashFiles('contracts/**/Cargo.toml') }}
+          restore-keys: cargo-repro-${{ runner.os }}-
+      - name: Verify WASM reproducibility against committed expected hashes
+        run: ./scripts/verify-wasm-reproducibility.sh
+
+  # ══════════════════════════════════════════════════════════════
+  # 7. RUST CLIPPY — Lint both Soroban contracts
   # ══════════════════════════════════════════════════════════════
   rust-clippy:
-    name: "6️⃣ Backend — Clippy (Rust Lint)"
+    name: "7️⃣ Backend — Clippy (Rust Lint)"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -183,7 +212,7 @@ jobs:
   # 7. RUST FORMAT — Check rustfmt on both contracts
   # ══════════════════════════════════════════════════════════════
   rust-fmt:
-    name: "7️⃣ Backend — Format (rustfmt)"
+    name: "8️⃣ Backend — Format (rustfmt)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -200,7 +229,7 @@ jobs:
   # 8. NEXT.JS BUILD — Production build verification
   # ══════════════════════════════════════════════════════════════
   next-build:
-    name: "8️⃣ Frontend — Build (Next.js)"
+    name: "9️⃣ Frontend — Build (Next.js)"
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -226,7 +255,7 @@ jobs:
   # 9. SMOKE TEST — HTTP checks against live Vercel (no browser)
   # ══════════════════════════════════════════════════════════════
   smoke-test:
-    name: "9️⃣ Frontend — Smoke (curl)"
+    name: "1️⃣0️⃣ Frontend — Smoke (curl)"
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
