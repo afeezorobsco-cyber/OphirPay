@@ -618,3 +618,41 @@ model ApiKey {
   /// Speeds up prefix-based identification lookups.
   @@index([prefix])
 }
+
+// ── Payment Status Sync (Horizon reconciliation job) ─────────
+
+/// Ledger row recording a single run of the periodic job that reconciles
+/// submitted payments against their on-chain Horizon outcome. Persisting the
+/// run lets the admin view surface job results and history, and lets the job
+/// guard against overlapping runs.
+model PaymentSyncRun {
+  /// Primary key — CUID generated at insert time.
+  id           String   @id @default(cuid())
+  /// How the run was triggered: "cron" (scheduled) or "admin" (on demand).
+  trigger      String
+  /// Run lifecycle: "running" | "success" | "error".
+  status       String
+  /// Payments in SUBMITTED state with a tx hash (eligible for reconciliation).
+  scanned      Int      @default(0)
+  /// Successful on-chain → payment marked CONFIRMED.
+  confirmed    Int      @default(0)
+  /// Failed on-chain → payment marked FAILED.
+  failed       Int      @default(0)
+  /// Hash not yet ingested by Horizon → payment left untouched.
+  notFound     Int      @default(0)
+  /// Horizon lookups that errored → payment left untouched.
+  errors       Int      @default(0)
+  /// First error message when the run itself threw.
+  errorMessage String?
+  /// When the run started.
+  createdAt    DateTime @default(now())
+  /// When the run finished (NULL while still running).
+  completedAt  DateTime?
+
+  /// Speeds up "all cron-triggered runs vs on-demand runs".
+  @@index([trigger])
+  /// Speeds up overlap checks ("is a run in flight?").
+  @@index([status])
+  /// Speeds up "most recent runs" (admin view).
+  @@index([createdAt])
+}
