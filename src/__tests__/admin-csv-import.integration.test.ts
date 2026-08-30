@@ -1,14 +1,21 @@
 // SPDX-License-Identifier: MIT
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { PrismaClient, User } from "@prisma/client";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { PrismaClient } from "@prisma/client";
 import { createBatchSchema } from "@/lib/validation-schemas";
 import { AUDIT_ACTIONS } from "@/lib/audit";
 import { createSessionToken, getAuthContext } from "@/lib/auth-session";
 import { successResponse, handleApiError } from "@/lib/api-response";
-import { csvImport } from "@/lib/csv-import";
+import * as csvImportModule from "@/lib/csv-import";
+import type { CsvImportRow } from "@/lib/csv-import";
 
-const DATABASE_URL = "postgresql://testuser:testpassword@localhost:5432/ophirpay_test?schema=public";
+const csvImport =
+  (csvImportModule as any).csvImport ||
+  (csvImportModule as any).default ||
+  (csvImportModule as any).parseCsv;
+
+const DATABASE_URL =
+  "postgresql://testuser:testpassword@localhost:5432/ophirpay_test?schema=public";
 
 let prisma: PrismaClient;
 let originalDbUrl: string | undefined;
@@ -49,18 +56,35 @@ afterAll(async () => {
 });
 
 describe("admin CSV import integration", () => {
-  const VALID_ADDRESS = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  const VALID_ADDRESS = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-  function csvFile(content: string): File {
-    return new File([content], "recipients.csv", { type: "text/csv" });
+  function csvFile(content: string): any {
+    const FileConstructor =
+      (globalThis as any).File ||
+      class {
+        name: string;
+        type: string;
+        private content: string;
+        constructor(chunks: string[], name: string, options?: any) {
+          this.name = name;
+          this.type = options?.type || "";
+          this.content = chunks.join("");
+        }
+        async text() {
+          return this.content;
+        }
+        async arrayBuffer() {
+          return new TextEncoder().encode(this.content).buffer;
+        }
+      };
+    return new FileConstructor([content], "recipients.csv", { type: "text/csv" });
   }
 
   const sampleCsv = `
 address,amount,memo
 ${VALID_ADDRESS},100,thanks
 G${"B".repeat(55)},50,
-`.trim();
-
+`;
   beforeEach(async () => {
     // Clean up any test data between tests
     await prisma.payment.deleteMany({});
@@ -70,15 +94,13 @@ G${"B".repeat(55)},50,
 
   it("imports CSV data and inserts rows into the database via admin batch creation", async () => {
     // Parse and validate the CSV file
-    const { rows, fileErrors } = await csvImport.parseRecipientsCsvToRows(
-      csvFile(sampleCsv)
-    );
+    const { rows, fileErrors } = await csvImport.parseRecipientsCsvToRows(csvFile(sampleCsv));
 
     expect(fileErrors).toEqual([]);
     expect(rows).toHaveLength(2);
-    expect(rows.every((r) => Object.keys(r.errors).length === 0)).toBe(true);
+    expect(rows.every((r: any) => Object.keys(r.errors || {}).length === 0)).toBe(true);
 
-// Simulate an authenticated admin request by creating a session cookie
+    // Simulate an authenticated admin request by creating a session cookie
     const publicKey = "GABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF01234";
     const sessionToken = createSessionToken(publicKey, "TESTNET");
 
@@ -86,7 +108,7 @@ G${"B".repeat(55)},50,
     const body = {
       name: "Admin CSV Import Batch",
       description: "Imported via admin CSV import",
-      recipients: rows.map((row, idx) => ({
+      recipients: rows.map((row: any, idx: number) => ({
         address: row.values.address,
         amount: parseFloat(row.values.amount),
         assetCode: "XLM",
@@ -101,7 +123,7 @@ G${"B".repeat(55)},50,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Cookie": `ophirpay_session=${sessionToken}`,
+        Cookie: `ophirpay_session=${sessionToken}`,
       },
       body: JSON.stringify(body),
     });
