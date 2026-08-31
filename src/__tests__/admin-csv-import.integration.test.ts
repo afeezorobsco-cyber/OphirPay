@@ -5,14 +5,20 @@ import { PrismaClient } from "@prisma/client";
 import { createBatchSchema } from "@/lib/validation-schemas";
 import { AUDIT_ACTIONS } from "@/lib/audit";
 import { createSessionToken, getAuthContext } from "@/lib/auth-session";
-import { successResponse, handleApiError } from "@/lib/api-response";
+import { successResponse } from "@/lib/api-response";
 import * as csvImportModule from "@/lib/csv-import";
-import type { CsvImportRow } from "@/lib/csv-import";
+
+interface CsvFileLike {
+  name: string;
+  type: string;
+  text(): Promise<string>;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
 
 const csvImport =
-  (csvImportModule as any).csvImport ||
-  (csvImportModule as any).default ||
-  (csvImportModule as any).parseCsv;
+  (csvImportModule as Record<string, unknown>).csvImport ||
+  (csvImportModule as Record<string, unknown>).default ||
+  (csvImportModule as Record<string, unknown>).parseCsv;
 
 const DATABASE_URL =
   "postgresql://testuser:testpassword@localhost:5432/ophirpay_test?schema=public";
@@ -58,23 +64,23 @@ afterAll(async () => {
 describe("admin CSV import integration", () => {
   const VALID_ADDRESS = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-  function csvFile(content: string): any {
+  function csvFile(content: string): CsvFileLike {
     const FileConstructor =
-      (globalThis as any).File ||
-      class {
+      (globalThis as { File?: new (chunks: string[], name: string, options?: { type: string }) => CsvFileLike }).File ||
+      class implements CsvFileLike {
         name: string;
         type: string;
         private content: string;
-        constructor(chunks: string[], name: string, options?: any) {
+        constructor(chunks: string[], name: string, options?: { type: string }) {
           this.name = name;
           this.type = options?.type || "";
           this.content = chunks.join("");
         }
-        async text() {
+        async text(): Promise<string> {
           return this.content;
         }
-        async arrayBuffer() {
-          return new TextEncoder().encode(this.content).buffer;
+        async arrayBuffer(): Promise<ArrayBuffer> {
+          return new TextEncoder().encode(this.content).buffer as ArrayBuffer;
         }
       };
     return new FileConstructor([content], "recipients.csv", { type: "text/csv" });
@@ -94,11 +100,11 @@ G${"B".repeat(55)},50,
 
   it("imports CSV data and inserts rows into the database via admin batch creation", async () => {
     // Parse and validate the CSV file
-    const { rows, fileErrors } = await csvImport.parseRecipientsCsvToRows(csvFile(sampleCsv));
+    const { rows, fileErrors } = await (csvImport as { parseRecipientsCsvToRows: (file: CsvFileLike) => Promise<{ rows: Array<{ values: Record<string, string>; errors: Record<string, unknown> }>; fileErrors: string[] }> }).parseRecipientsCsvToRows(csvFile(sampleCsv));
 
     expect(fileErrors).toEqual([]);
     expect(rows).toHaveLength(2);
-    expect(rows.every((r: any) => Object.keys(r.errors || {}).length === 0)).toBe(true);
+    expect(rows.every((r: { errors: Record<string, unknown> }) => Object.keys(r.errors || {}).length === 0)).toBe(true);
 
     // Simulate an authenticated admin request by creating a session cookie
     const publicKey = "GABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF01234";
@@ -108,7 +114,7 @@ G${"B".repeat(55)},50,
     const body = {
       name: "Admin CSV Import Batch",
       description: "Imported via admin CSV import",
-      recipients: rows.map((row: any, idx: number) => ({
+      recipients: rows.map((row: { values: Record<string, string> }, _idx: number) => ({
         address: row.values.address,
         amount: parseFloat(row.values.amount),
         assetCode: "XLM",
@@ -133,7 +139,7 @@ G${"B".repeat(55)},50,
     expect(auth?.userId).toBe(testUserId);
 
     const response = await fetch(request);
-    const result = await successResponse(response);
+    await successResponse(response);
 
     // Assert rows were inserted into the database
     const batches = await prisma.batch.findMany({
@@ -160,14 +166,6 @@ G${"B".repeat(55)},50,
     // Verify the audit action type constant is correctly defined
     expect(AUDIT_ACTIONS.BATCH_CREATE).toBe("batch:create");
     expect(typeof AUDIT_ACTIONS.BATCH_CREATE).toBe("string");
-
-    // In a full integration test with the running server,
-    // the POST /api/batches handler would call:
-    // recordAudit(AUDIT_ACTIONS.BATCH_CREATE, {
-    //   actor: authContext.publicKey || "system",
-    //   target: batches[0].id,
-    //   details: { csvRows: 2, source: "admin_import" },
-    // });
 
     // For this unit-level verification, we confirm the audit action
     // type is available and used consistently across the codebase.

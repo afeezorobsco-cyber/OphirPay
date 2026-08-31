@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 import { withApiAuth } from "@/lib/api-auth";
-import { successResponse, handleApiError, validationError } from "@/lib/api-response";
+import { successResponse, handleApiError, badRequestError } from "@/lib/api-response";
+import prisma from "@/lib/prisma";
 import { withRequestLogging } from "@/lib/request-logging";
 import {
   auditLogQuerySchema,
@@ -9,8 +10,11 @@ import {
   iterateAuditLogEntries,
   type AuditLogEntry,
 } from "@/lib/audit-log";
+import { z } from "zod";
 
-export type { AuditLogEntry };
+const routeSchema = auditLogQuerySchema.extend({
+  source: z.enum(["contract", "db", "all"]).optional().default("contract"),
+});
 
 /**
  * GET /api/audit-log
@@ -26,30 +30,43 @@ export type { AuditLogEntry };
 async function _GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    // Blank query params are treated as absent (Zod .optional() only applies
-    // to undefined).
-    const param = (name: string): string | undefined => {
-      const v = searchParams.get(name);
-      return v == null || v.trim() === "" ? undefined : v;
-    };
+    const raw = Object.fromEntries(searchParams.entries());
+    const parsed = routeSchema.safeParse(raw);
+    if (!parsed.success) {
+      return badRequestError(
+        parsed.error.issues.map((e) => e.message).join("; ")
+      );
+    }
 
-    const parsed = auditLogQuerySchema.safeParse({
-      page: param("page"),
-      limit: param("limit"),
-      actor: param("actor"),
-      action: param("action"),
-      resource: param("resource"),
-      since: param("since"),
-      until: param("until"),
-      order: param("order"),
-    });
-    if (!parsed.success) return validationError(parsed.error);
+    const { page, limit, source } = parsed.data;
 
-    const { page, limit } = parsed.data;
+    // Persisted (DB) audit entries — refund lifecycle history with record
+    // ids, queryable by action/target (issue #365).
+    const dbEntries = source === "db" || source === "all"
+      ? await prisma.auditLog.findMany({
+          orderBy: { createdAt: "desc" },
+          skip: (page - 1) * limit,
+          take: limit,
+          ...(parsed.data.action ? { where: { action: parsed.data.action } } : {}),
+        })
+      : [];
+
+    if (source === "db") {
+      return successResponse(
+        dbEntries.map((e) => ({
+          id: e.id,
+          timestamp: new Date(e.createdAt).getTime(),
+          action: e.action,
+          actor: e.actor ?? "",
+          target_id: e.target ?? "",
+          details: e.details ?? null,
+        })),
+        { page, limit, total: 0 }
+      );
+    }
+
+    // Contract (on-chain) audit entries
     const filters = toAuditLogFilters(parsed.data);
-
-    // Collect the filtered set (bounded by the on-chain ledger) to compute the
-    // total for offset pagination.
     const all: AuditLogEntry[] = [];
     for await (const entry of iterateAuditLogEntries(filters)) {
       all.push(entry);
@@ -57,14 +74,11 @@ async function _GET(request: Request) {
     const total = all.length;
     const start = (page - 1) * limit;
     const items = all.slice(start, start + limit);
-    const hasMore = start + limit < total;
 
     return successResponse(items, {
       page,
       limit,
       total,
-      nextCursor: null,
-      hasMore,
     });
   } catch (error) {
     return handleApiError(error);

@@ -251,7 +251,7 @@ export async function runPaymentStatusSync(
       id: run.id,
       trigger,
       status: "error",
-      scanned: pendingCount,
+      scanned: 0,
       confirmed: counters.confirmed,
       failed: counters.failed,
       notFound: counters.notFound,

@@ -7,6 +7,18 @@ import { withRequestLogging } from "@/lib/request-logging";
 import { getAuthContext } from "@/lib/auth-session";
 import type { BatchStatus, PaymentStatus } from "@/types";
 
+type BatchGroupResult = { status: string; _count: { _all: number } };
+
+type BatchDrillDown = {
+  id: string;
+  name: string;
+  description: string | null;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+  paymentCounts?: { total: number; completed: number; failed: number; pending: number };
+};
+
 const BATCH_STATUSES: BatchStatus[] = [
   "CREATED",
   "PROCESSING",
@@ -87,10 +99,13 @@ export const GET = withMetrics(
       const counts: Record<string, number> = Object.fromEntries(
         BATCH_STATUSES.map((s: BatchStatus) => [s, 0])
       );
-      for (const g of statusGroups as any[]) {
+      for (const g of statusGroups as BatchGroupResult[]) {
         counts[g.status] = g._count._all;
       }
-      const total = (statusGroups as any[]).reduce((sum: number, g: any) => sum + g._count._all, 0);
+      const total = (statusGroups as BatchGroupResult[]).reduce(
+        (sum: number, g: BatchGroupResult) => sum + g._count._all,
+        0
+      );
       // Per-batch payment progress keyed by batchId → status → count.
       const perBatchStatus = new Map<string, Record<string, number>>();
 
@@ -104,11 +119,11 @@ export const GET = withMetrics(
 
         globalProgress.total += p._count._all;
         if (p.status === "COMPLETED") globalProgress.completed += p._count._all;
-        else if (FAILED_STATUSES.has(p.status as any)) globalProgress.failed += p._count._all;
+        else if (FAILED_STATUSES.has(p.status as PaymentStatus)) globalProgress.failed += p._count._all;
         else globalProgress.pending += p._count._all;
       }
 
-      const drillDown = batches.map((batch: any) => {
+      const drillDown = batches.map((batch: BatchDrillDown) => {
         const pc = perBatchStatus.get(batch.id) ?? {};
         const completed = pc["COMPLETED"] ?? 0;
         const failed = (pc["FAILED"] ?? 0) + (pc["CANCELLED"] ?? 0);
