@@ -5,10 +5,59 @@ import { test, expect } from "@playwright/test";
 // Mobile viewport (Pixel 5)
 const MOBILE_VIEWPORT = { width: 412, height: 915 };
 
+// Fake Stellar public key for the mock wallet
+const MOCK_PUBLIC_KEY = "GBD4R7KL1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZABCD";
+
+interface FreighterMock {
+  isConnected: () => Promise<boolean>;
+  getAddress: () => Promise<string>;
+  getNetwork: () => Promise<string>;
+  requestAccess: () => Promise<string>;
+  signTransaction: (xdr: string) => Promise<string>;
+  signMessage: () => Promise<string>;
+  getNetworkDetails: () => Promise<{ network: string; networkPassphrase: string }>;
+}
+
+/** Mock the Freighter wallet extension so the page renders the form. */
+async function mockWalletConnection(page: import("@playwright/test").Page) {
+  await page.addInitScript((pk: string) => {
+    const mock: FreighterMock = {
+      isConnected: async () => true,
+      getAddress: async () => pk,
+      getNetwork: async () => "TESTNET",
+      requestAccess: async () => pk,
+      signTransaction: async (xdr: string) => xdr,
+      signMessage: async () => "mock-signature",
+      getNetworkDetails: async () => ({
+        network: "TESTNET",
+        networkPassphrase: "Test SDF Network ; September 2015",
+      }),
+    };
+    (window as unknown as Record<string, unknown>).freighter = mock;
+  }, MOCK_PUBLIC_KEY);
+
+  // Mock the Horizon balance API to return a sufficient balance
+  await page.route("**/accounts/**/balances", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        balances: [
+          {
+            balance: "10000.0000000",
+            asset_type: "native",
+          },
+        ],
+      }),
+    })
+  );
+}
+
 test.describe("Batch Creation - Mobile Layout", () => {
   test.use({ viewport: MOBILE_VIEWPORT });
 
   test("batch form renders correctly on mobile", async ({ page }) => {
+    await mockWalletConnection(page);
     await page.goto("/batches/new");
 
     // Wait for page to load
@@ -35,6 +84,7 @@ test.describe("Batch Creation - Mobile Layout", () => {
   });
 
   test("CSV dropzone fits within mobile viewport", async ({ page }) => {
+    await mockWalletConnection(page);
     await page.goto("/batches/new");
 
     const dropzone = page.locator("[data-testid='csv-dropzone']");
@@ -51,6 +101,7 @@ test.describe("Batch Creation - Mobile Layout", () => {
   });
 
   test("no horizontal overflow on mobile", async ({ page }) => {
+    await mockWalletConnection(page);
     await page.goto("/batches/new");
 
     // Wait for page to load
@@ -64,6 +115,7 @@ test.describe("Batch Creation - Mobile Layout", () => {
   });
 
   test("recipient row inputs have proper touch targets", async ({ page }) => {
+    await mockWalletConnection(page);
     await page.goto("/batches/new");
 
     // Wait for page to load
@@ -89,6 +141,7 @@ test.describe("Batch Creation - Mobile Layout", () => {
   });
 
   test("Add Recipient button has proper touch target", async ({ page }) => {
+    await mockWalletConnection(page);
     await page.goto("/batches/new");
 
     // Wait for page to load
@@ -102,6 +155,7 @@ test.describe("Batch Creation - Mobile Layout", () => {
   });
 
   test("Remove button has proper touch target", async ({ page }) => {
+    await mockWalletConnection(page);
     await page.goto("/batches/new");
 
     // Wait for page to load
@@ -120,6 +174,7 @@ test.describe("Batch Creation - Mobile Layout", () => {
   });
 
   test("Send Batch Payment button has proper touch target", async ({ page }) => {
+    await mockWalletConnection(page);
     await page.goto("/batches/new");
 
     // Wait for page to load
@@ -133,14 +188,15 @@ test.describe("Batch Creation - Mobile Layout", () => {
   });
 
   test("confirmation dialog opens correctly on mobile", async ({ page }) => {
+    await mockWalletConnection(page);
     await page.goto("/batches/new");
 
     // Wait for page to load
     await expect(page.locator("main")).toBeVisible({ timeout: 15000 });
 
-    // Fill in a valid recipient
+    // Fill in a valid recipient (use a different address than the wallet's own)
     const addressInput = page.locator('input[placeholder*="G... destination address"]').first();
-    await addressInput.fill("GBD4R7KL1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZABCD");
+    await addressInput.fill("GCZBMJLNWV5KQ5MG3KQG7ZQ6M7ZS5YRLZVFKQWVGCFSVMNAMR7ZNCJ4");
 
     const amountInput = page.locator('input[placeholder="0.00"]').first();
     await amountInput.fill("10");
@@ -180,6 +236,7 @@ test.describe("Batch Creation - Mobile Layout", () => {
   });
 
   test("desktop layout still works", async ({ page }) => {
+    await mockWalletConnection(page);
     // Use desktop viewport
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/batches/new");
