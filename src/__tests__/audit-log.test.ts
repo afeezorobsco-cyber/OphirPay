@@ -37,7 +37,7 @@ describe("parseAuditTimestamp", () => {
     expect(parseAuditTimestamp("  1785168000  ")).toBe(1785168000);
   });
 
-  it("returns null for unparseable input", () => {
+  it("returns null for unparsable input", () => {
     expect(parseAuditTimestamp("not-a-date")).toBeNull();
     expect(parseAuditTimestamp("999999999999999999999")).toBeNull();
   });

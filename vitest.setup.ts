@@ -58,3 +58,45 @@ if (typeof globalThis.localStorage === "undefined" || typeof globalThis.localSto
     });
   }
 }
+
+// Polyfill File.prototype.text() for jsdom (used by csv-import)
+if (typeof File !== "undefined" && typeof File.prototype.text === "undefined") {
+  File.prototype.text = async function text(): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(this);
+    });
+  };
+}
+
+// Polyfill File.prototype.arrayBuffer() for jsdom
+if (typeof File !== "undefined" && typeof File.prototype.arrayBuffer === "undefined") {
+  File.prototype.arrayBuffer = async function arrayBuffer(): Promise<ArrayBuffer> {
+    return new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result;
+        if (result instanceof ArrayBuffer) {
+          resolve(result);
+        } else {
+          reject(new Error("Expected ArrayBuffer result"));
+        }
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(this);
+    });
+  };
+}
+
+// Polyfill URL.createObjectURL / revokeObjectURL for jsdom
+if (typeof URL.createObjectURL === "undefined") {
+  let objectURLCounter = 0;
+  URL.createObjectURL = function createObjectURL(_blob: Blob): string {
+    return `blob:mock/${++objectURLCounter}`;
+  };
+  URL.revokeObjectURL = function revokeObjectURL(_url: string): void {
+    // no-op in test environment
+  };
+}

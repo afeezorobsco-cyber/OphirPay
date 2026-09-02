@@ -19,7 +19,7 @@ import { formatAmount, shortenAddress } from "@/lib/utils";
 import { validateMemo } from "@/lib/validation-helpers";
 import { estimateBatchFee } from "@/lib/fee-estimator";
 import { CopyButton } from "@/components/ui/CopyButton";
-import { parseRecipientsCsv, downloadCsvTemplate } from "@/lib/csv-import";
+import { MAX_BATCH_RECIPIENTS } from "@/lib/csv-import";
 import { AddressBookMultiSelect } from "@/components/batches/AddressBookMultiSelect";
 import { mergeAddressBookSelections } from "@/lib/address-book";
 import type { AddressEntry } from "@/lib/address-book";
@@ -82,19 +82,28 @@ export default function NewBatchPage() {
   const [mode, setMode] = useState<EntryMode>("manual");
   const [csvValid, setCsvValid] = useState(false);
 
+  // Track the latest CSV import generation to prevent stale overwrites
+  const csvGenerationRef = useRef(0);
+
   // ── CSV import wiring ────────────────────────────────────
 
   // Sync recipients from the valid CSV rows so the total, balance check,
   // and send flow all work identically for both entry modes.
   const handleCsvRows = useCallback((validRows: CsvRecipientRow[]) => {
-    setRecipients(
-      validRows.map((r) => ({
+    // Increment generation; only the latest import applies
+    const gen = ++csvGenerationRef.current;
+
+    setRecipients((prev) => {
+      // If a newer import has started, discard this one
+      if (gen !== csvGenerationRef.current) return prev;
+
+      return validRows.map((r) => ({
         id: nextId++,
         address: r.address,
         amount: r.amount,
         memo: r.memo ?? "",
-      }))
-    );
+      }));
+    });
   }, []);
 
   const handleCsvValidity = useCallback((valid: boolean) => {
@@ -112,7 +121,7 @@ export default function NewBatchPage() {
   // ── Recipient management ──────────────────────────────────
 
   const addRecipient = () => {
-    if (recipients.length >= 50) return;
+    if (recipients.length >= MAX_BATCH_RECIPIENTS) return;
     setRecipients([
       ...recipients,
       { id: nextId++, address: "", amount: "", memo: "" },
@@ -131,7 +140,7 @@ export default function NewBatchPage() {
         entries,
         prev.map((r) => r.address)
       );
-      const room = 50 - prev.length;
+      const room = MAX_BATCH_RECIPIENTS - prev.length;
       const added = toAdd.slice(0, room).map((e) => ({
         id: nextId++,
         address: e.publicKey,
@@ -156,6 +165,15 @@ export default function NewBatchPage() {
 
   const validate = (): boolean => {
     setValidationError(null);
+
+    if (recipients.length === 0) {
+      setValidationError("Add at least one recipient.");
+      return false;
+    }
+    if (recipients.length > MAX_BATCH_RECIPIENTS) {
+      setValidationError(`Maximum ${MAX_BATCH_RECIPIENTS} recipients allowed per batch.`);
+      return false;
+    }
 
     let totalAmount = 0;
     for (let i = 0; i < recipients.length; i++) {
@@ -552,7 +570,7 @@ export default function NewBatchPage() {
                 mode === "manual"
                   ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
                   : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              }`
+              }`}
             >
               Manual entry
             </button>
@@ -586,7 +604,7 @@ export default function NewBatchPage() {
               </p>
               <button
                 onClick={addRecipient}
-                disabled={isSubmitting || recipients.length >= 50}
+                disabled={isSubmitting || recipients.length >= MAX_BATCH_RECIPIENTS}
                 className="inline-flex items-center gap-1.5 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors"
               >
                 <svg

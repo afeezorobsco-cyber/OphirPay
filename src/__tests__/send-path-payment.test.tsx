@@ -66,6 +66,20 @@ vi.mock("@/hooks/useApiQuery", () => ({
   }),
 }));
 
+// Mock trustline check (used by AssetSelector internally)
+vi.mock("@/lib/trustline", () => ({
+  checkTrustline: vi.fn().mockResolvedValue({ hasTrustline: true }),
+}));
+
+// Mock stellar fetchAllBalances (used by AssetSelector)
+vi.mock("@/lib/stellar", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/stellar")>();
+  return {
+    ...original,
+    fetchAllBalances: vi.fn().mockResolvedValue([]),
+  };
+});
+
 describe("SendPage - Path Payment Cross-Asset UI", () => {
   beforeEach(() => {
     vi.clearAllMocks();

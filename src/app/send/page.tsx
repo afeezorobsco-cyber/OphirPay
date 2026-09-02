@@ -278,7 +278,7 @@ function SendPageClient() {
       selectedAsset.type === "native"
     ) {
       setValidationError(
-        "This recipient account does not exist yet. Enable "Fund new account (sponsor)" to create it in the same transaction, or use an existing address."
+        "This recipient account does not exist yet. Enable 'Fund new account (sponsor)' to create it in the same transaction, or use an existing address."
       );
       return false;
     }

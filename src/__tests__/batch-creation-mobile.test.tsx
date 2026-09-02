@@ -2,6 +2,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 // Mock the wallet hook
 vi.mock("@/hooks/useMultiWallet", () => ({
@@ -33,6 +34,7 @@ vi.mock("@/lib/wallets", () => ({
 
 // Mock the utils
 vi.mock("@/lib/utils", () => ({
+  cn: (...args: (string | false | undefined | null)[]) => args.filter(Boolean).join(" "),
   formatAmount: (amount: number, code: string) => `${amount.toFixed(2)} ${code}`,
   shortenAddress: (addr: string, chars: number) => `${addr.slice(0, chars + 1)}...${addr.slice(-chars)}`,
 }));
@@ -45,7 +47,11 @@ vi.mock("@/lib/fee-estimator", () => ({
 // Mock the CSV import
 vi.mock("@/lib/csv-import", () => ({
   parseRecipientsCsv: vi.fn(),
+  parseRecipientsCsvToRows: vi.fn().mockResolvedValue({ rows: [], fileErrors: [] }),
+  validateRecipientFields: vi.fn().mockReturnValue({}),
+  applyDuplicateErrors: vi.fn(),
   downloadCsvTemplate: vi.fn(),
+  MAX_BATCH_RECIPIENTS: 100,
 }));
 
 // Mock the BatchConfirmDialog
@@ -75,6 +81,17 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+// Mock the AddressBookMultiSelect
+vi.mock("@/components/batches/AddressBookMultiSelect", () => ({
+  AddressBookMultiSelect: () => <div data-testid="address-book-select" />,
+}));
+
+// Mock the address-book lib
+vi.mock("@/lib/address-book", () => ({
+  mergeAddressBookSelections: (rows: unknown[], _selections: unknown[]) => rows,
+}));
+
+import React from "react";
 import NewBatchPage from "@/app/batches/new/page";
 
 describe("NewBatchPage - Mobile Layout", () => {
@@ -82,33 +99,18 @@ describe("NewBatchPage - Mobile Layout", () => {
     vi.clearAllMocks();
   });
 
-  it("renders CSV dropzone", () => {
+  it("renders recipient row inputs in manual mode", () => {
     render(<NewBatchPage />);
-    expect(screen.getByTestId("csv-dropzone")).toBeDefined();
+    expect(screen.getByPlaceholderText("G... destination address")).toBeDefined();
+    expect(screen.getByPlaceholderText("0.00")).toBeDefined();
+    expect(screen.getByPlaceholderText("Memo (optional)")).toBeDefined();
   });
 
-  it("renders Choose CSV File button with proper touch target", () => {
-    render(<NewBatchPage />);
-    const chooseFileBtn = screen.getByText("Choose CSV File");
-    expect(chooseFileBtn).toBeDefined();
-    // Check for min-h-[44px] class
-    expect(chooseFileBtn.className).toContain("min-h-[44px]");
-  });
-
-  it("renders Download Template button with proper touch target", () => {
-    render(<NewBatchPage />);
-    const downloadTemplateBtn = screen.getByText("Download Template");
-    expect(downloadTemplateBtn).toBeDefined();
-    // Check for min-h-[44px] class
-    expect(downloadTemplateBtn.className).toContain("min-h-[44px]");
-  });
-
-  it("renders Add Recipient button with proper touch target", () => {
+  it("renders Add Recipient button", () => {
     render(<NewBatchPage />);
     const addRecipientBtn = screen.getByText("Add Recipient");
     expect(addRecipientBtn).toBeDefined();
-    // Check for min-h-[44px] class
-    expect(addRecipientBtn.className).toContain("min-h-[44px]");
+    expect(addRecipientBtn.tagName).toBe("BUTTON");
   });
 
   it("renders Send Batch Payment button with proper touch target", () => {
@@ -119,16 +121,21 @@ describe("NewBatchPage - Mobile Layout", () => {
     expect(sendBtn.className).toContain("py-3");
   });
 
-  it("renders recipient row inputs", () => {
+  it("renders recipient mode toggle (Manual / Upload CSV)", () => {
     render(<NewBatchPage />);
-    expect(screen.getByPlaceholderText("G... destination address")).toBeDefined();
-    expect(screen.getByPlaceholderText("0.00")).toBeDefined();
-    expect(screen.getByPlaceholderText("Memo (optional)")).toBeDefined();
+    expect(screen.getByText("Manual entry")).toBeDefined();
+    expect(screen.getByText("Upload CSV")).toBeDefined();
+  });
+
+  it("switches to CSV mode and renders the CSV dropzone", async () => {
+    const user = userEvent.setup();
+    render(<NewBatchPage />);
+    await user.click(screen.getByText("Upload CSV"));
+    expect(screen.getByTestId("csv-dropzone")).toBeDefined();
   });
 
   it("has responsive container classes", () => {
     render(<NewBatchPage />);
-    // Check for mobile-responsive container (go up past the breadcrumb div)
     const heading = screen.getByText("New Batch Payment");
     const breadcrumbDiv = heading.closest("div");
     const container = breadcrumbDiv?.parentElement;

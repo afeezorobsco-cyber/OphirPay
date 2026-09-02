@@ -202,7 +202,7 @@ describe("API Routes: Analytics, Audit Log, Metrics & Stats", () => {
 
   describe("GET /api/metrics", () => {
     it("returns Prometheus formatted metrics text", async () => {
-      const res = await getMetrics(new Request("http://localhost/api/metrics"));
+      const res = await getMetrics();
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toContain("text/plain");
       const text = await res.text();

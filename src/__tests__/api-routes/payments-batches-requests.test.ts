@@ -2,29 +2,39 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock dependencies
+// Shared mock objects used by both prisma and $transaction's tx
+const mocks = vi.hoisted(() => ({
+  batch: {
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
+    count: vi.fn(),
+    create: vi.fn(),
+    findFirst: vi.fn(),
+  },
+  payment: {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    findUnique: vi.fn(),
+    count: vi.fn(),
+    create: vi.fn(),
+    createMany: vi.fn(),
+    updateMany: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+  paymentRequest: {
+    findMany: vi.fn(),
+    create: vi.fn(),
+  },
+}));
+
 vi.mock("@/lib/prisma", () => ({
   default: {
-    payment: {
-      findMany: vi.fn(),
-      findFirst: vi.fn(),
-      findUnique: vi.fn(),
-      count: vi.fn(),
-      create: vi.fn(),
-      createMany: vi.fn(),
-      updateMany: vi.fn(),
-      deleteMany: vi.fn(),
-    },
-    batch: {
-      findMany: vi.fn(),
-      findUnique: vi.fn(),
-      count: vi.fn(),
-      create: vi.fn(),
-    },
-    paymentRequest: {
-      findMany: vi.fn(),
-      create: vi.fn(),
-    },
+    $transaction: vi.fn(async (fn: (tx: never) => Promise<unknown>) =>
+      fn({ batch: mocks.batch, payment: mocks.payment, paymentRequest: mocks.paymentRequest } as never)
+    ),
+    batch: mocks.batch,
+    payment: mocks.payment,
+    paymentRequest: mocks.paymentRequest,
   },
 }));
 
@@ -38,6 +48,7 @@ vi.mock("@/lib/webhook-dispatcher", () => ({
 
 vi.mock("@/lib/metrics-counters", () => ({
   incMetric: vi.fn(),
+  recordEndpointLatency: vi.fn(),
 }));
 
 vi.mock("@/lib/contracts", () => ({
@@ -223,7 +234,7 @@ describe("API Routes: Payments, Batches & Requests", () => {
 
     it("DELETE removes payment record", async () => {
       vi.mocked(authSession.getAuthContext).mockResolvedValueOnce(MOCK_AUTH);
-      vi.mocked(prisma.payment.deleteMany).mockResolvedValueOnce({ count: 1 });
+      vi.mocked(prisma.payment.updateMany).mockResolvedValueOnce({ count: 1 });
 
       const res = await deletePaymentById(
         new Request("http://localhost/api/payments/p1", { method: "DELETE" }),
@@ -238,7 +249,7 @@ describe("API Routes: Payments, Batches & Requests", () => {
 
     it("DELETE returns 404 when payment is not found", async () => {
       vi.mocked(authSession.getAuthContext).mockResolvedValueOnce(MOCK_AUTH);
-      vi.mocked(prisma.payment.deleteMany).mockResolvedValueOnce({ count: 0 });
+      vi.mocked(prisma.payment.updateMany).mockResolvedValueOnce({ count: 0 });
 
       const res = await deletePaymentById(
         new Request("http://localhost/api/payments/p1", { method: "DELETE" }),

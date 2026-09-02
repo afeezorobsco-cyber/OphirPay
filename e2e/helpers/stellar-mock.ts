@@ -17,7 +17,7 @@
 //   • POST Soroban RPC getLedgerEntries → a valid AccountEntry (for getAccount)
 //   • POST Soroban RPC simulateTransaction → a successful SorobanTransactionData
 //   • POST Soroban RPC sendTransaction    → PENDING (accepted)
-//   • POST Soroban RPC getTransaction     → an unparseable protocol-27 result
+//   • POST Soroban RPC getTransaction     → an unparsable protocol-27 result
 //     that makes the SDK throw "Bad union switch" — the exact code path the
 //     app already handles (see submitContractInvocation) before falling back
 //   • GET  Horizon /transactions/{hash}   → { successful: true }

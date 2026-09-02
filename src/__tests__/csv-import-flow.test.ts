@@ -202,7 +202,7 @@ describe("csv-import-flow > parseRecipientsCsvToRows", () => {
     expect(fileErrors[0]).toMatch(/header row/i);
   });
 
-  it("reports a file error when the batch exceeds the recipient limit", async () => {
+  it("truncates and warns when the batch exceeds the recipient limit", async () => {
     const lines = ["address,amount,memo"];
     for (let i = 0; i < MAX_BATCH_RECIPIENTS + 1; i++) {
       lines.push(`${VALID_ADDRESS},${i + 1},`);
@@ -210,8 +210,9 @@ describe("csv-import-flow > parseRecipientsCsvToRows", () => {
     const { rows, fileErrors } = await parseRecipientsCsvToRows(
       csvFile(lines.join("\n"))
     );
-    expect(rows).toHaveLength(MAX_BATCH_RECIPIENTS + 1);
-    expect(fileErrors[0]).toMatch(/maximum/i);
+    expect(rows).toHaveLength(MAX_BATCH_RECIPIENTS);
+    expect(fileErrors).toHaveLength(1);
+    expect(fileErrors[0]).toMatch(/only the first/i);
   });
 
   it("trims surrounding whitespace from cells", async () => {

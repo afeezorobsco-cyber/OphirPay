@@ -263,4 +263,4 @@ export const POST = withMetrics("POST /api/batches", withRequestLogging(async fu
   } catch (err) {
     return handleApiError(err, "POST /api/batches");
   }
-})));
+}));

@@ -43,6 +43,7 @@ export function CsvBatchImport({
   const [fileName, setFileName] = useState<string | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const parseGenerationRef = useRef(0);
 
   const errorCount = rows.filter(
     (r) => Object.keys(r.errors).length > 0
@@ -69,7 +70,9 @@ export function CsvBatchImport({
     async (files: FileList | File[] | null) => {
       const file = files?.[0];
       if (!file) return;
+      const gen = ++parseGenerationRef.current;
       const result = await parseRecipientsCsvToRows(file, { selfAddress });
+      if (gen !== parseGenerationRef.current) return;
       setRows(result.rows);
       setFileErrors(result.fileErrors);
       setFileName(file.name);
@@ -108,6 +111,7 @@ export function CsvBatchImport({
   };
 
   const clearFile = () => {
+    ++parseGenerationRef.current;
     setRows([]);
     setFileErrors([]);
     setFileName(null);

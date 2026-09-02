@@ -193,13 +193,16 @@ export async function parseRecipientsCsvToRows(
   const memoI = memoIdx >= 0 ? memoIdx : 2;
 
   const dataRows = parsed.slice(1);
-  if (dataRows.length > MAX_BATCH_RECIPIENTS) {
+  const truncated = dataRows.length > MAX_BATCH_RECIPIENTS;
+  const rowsToProcess = truncated ? dataRows.slice(0, MAX_BATCH_RECIPIENTS) : dataRows;
+
+  if (truncated) {
     fileErrors.push(
-      `Maximum ${MAX_BATCH_RECIPIENTS} recipients per batch. Remove rows or split the file into multiple batches.`
+      `${dataRows.length} rows found — only the first ${MAX_BATCH_RECIPIENTS} will be imported. Split the file into multiple batches for more recipients.`
     );
   }
 
-  const rows: CsvImportRow[] = dataRows.map((cells, idx) => {
+  const rows: CsvImportRow[] = rowsToProcess.map((cells, idx) => {
     const get = (i: number) => (cells[i] ?? "").trim();
     const values = {
       address: get(addrI),
